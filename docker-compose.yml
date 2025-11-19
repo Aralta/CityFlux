@@ -1,7 +1,9 @@
 services:
   db:
-    image: postgres:16-alpine
-    container_name: mobility-db
+    build:
+      context: ./db
+      dockerfile: Dockerfile
+    container_name: postgres_postgis
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -10,13 +12,17 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+
+    networks:
+       - mobility-network
+
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - mobility-network
+      start_period: 20s
+
 
   spark-master:
     build:

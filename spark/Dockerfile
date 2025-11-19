@@ -53,6 +53,8 @@ RUN mkdir -p /opt/spark/spark-events /opt/spark/data /opt/spark/apps && \
 COPY entrypoint.sh ${SPARK_HOME}/entrypoint.sh
 RUN chmod +x ${SPARK_HOME}/entrypoint.sh
 
+COPY app/upper.py ${SPARK_HOME}/apps/upper.py
+
 EXPOSE 8080 7077 18080
 
 ENTRYPOINT ["./entrypoint.sh"]
