@@ -15,11 +15,5 @@ until nc -z spark-master 7077; do
 done
 echo "✅ Spark Master prêt!"
 
-#echo "🗄️  Application des migrations..." 
-#python manage.py migrate --noinput || true
-
-#echo "📦 Collecte des fichiers statiques..."
-#python manage.py collectstatic --noinput || true
-
 echo "🚀 Démarrage du serveur Django..."
-exec python /app/handler.py runserver 0.0.0.0:8000
+exec python /app/app.py runserver 0.0.0.0:8000
