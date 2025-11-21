@@ -3,7 +3,9 @@ Vue pour la page de carte interactive avec OpenStreetMap et Leaflet
 """
 from django.http import HttpResponse, JsonResponse
 from django.template import loader
+from .database import db_manager
 import json
+import traceback
 
 def carte_view(request):
     """
@@ -20,65 +22,99 @@ def carte_view(request):
 
 def api_search(request):
     """
-    API de recherche de lieux
-    Endpoint: /api/search?q=...
-    Retourne les coordonnées d'un lieu recherché
+    API de recherche de lieux dans la base de données
     """
-    query = request.GET.get('q', '')
+    query = request.GET.get('q', '').strip()
     
-    if not query:
-        return JsonResponse({'error': 'Aucun terme de recherche fourni'}, status=400)
+    if not query or len(query) < 3:
+        return JsonResponse({'results': []})
     
-    # Simulation de résultats (à remplacer par un vrai appel à Nominatim ou votre base de données)
-    # En production, faire un appel à https://nominatim.openstreetmap.org/search
-    
-    # Données de démonstration pour Pourrières et environs
-    mock_data = {
-        'pourrieres': {'lat': 43.4853, 'lng': 5.7246, 'name': 'Pourrières', 'zoom': 14},
-        'mairie': {'lat': 43.4853, 'lng': 5.7246, 'name': 'Mairie de Pourrières', 'zoom': 16},
-        'ecole': {'lat': 43.4858, 'lng': 5.7251, 'name': 'École élémentaire', 'zoom': 17},
-        'aix': {'lat': 43.5297, 'lng': 5.4474, 'name': 'Aix-en-Provence', 'zoom': 13},
-        'marseille': {'lat': 43.2965, 'lng': 5.3698, 'name': 'Marseille', 'zoom': 12}
-    }
-    
-    # Recherche simple dans les données de démonstration
-    query_lower = query.lower()
-    for key, value in mock_data.items():
-        if key in query_lower or query_lower in value['name'].lower():
-            return JsonResponse({
-                'success': True,
-                'result': {
-                    'lat': value['lat'],
-                    'lng': value['lng'],
-                    'name': value['name'],
-                    'zoom': value['zoom']
-                }
-            })
-    
-    # Si aucun résultat trouvé
-    return JsonResponse({
-        'success': False,
-        'message': f'Aucun résultat trouvé pour "{query}"'
-    }, status=404)
+    try:
+        # Rechercher dans les arrêts
+        arrets_query = """
+        SELECT 
+            a.nom,
+            ST_Y(a.position) as lat,
+            ST_X(a.position) as lng,
+            t.nom as type
+        FROM arret a
+        LEFT JOIN type_transport t ON a.id_type = t.id
+        WHERE LOWER(a.nom) LIKE LOWER(%s)
+        LIMIT 5
+        """
+        arrets = db_manager.execute_query(arrets_query, (f'%{query}%',))
+        
+        # Rechercher dans les POI
+        poi_query = """
+        SELECT 
+            nom,
+            ST_Y(position) as lat,
+            ST_X(position) as lng,
+            type
+        FROM poi
+        WHERE LOWER(nom) LIKE LOWER(%s)
+        LIMIT 5
+        """
+        pois = db_manager.execute_query(poi_query, (f'%{query}%',))
+        
+        results = []
+        
+        if arrets:
+            for arret in arrets:
+                results.append({
+                    'name': arret['nom'],
+                    'lat': float(arret['lat']),
+                    'lng': float(arret['lng']),
+                    'type': f"🚏 {arret['type'] or 'Arrêt'}",
+                    'category': 'transport'
+                })
+        
+        if pois:
+            for poi in pois:
+                results.append({
+                    'name': poi['nom'],
+                    'lat': float(poi['lat']),
+                    'lng': float(poi['lng']),
+                    'type': f"📍 {poi['type'] or 'POI'}",
+                    'category': 'poi'
+                })
+        
+        return JsonResponse({'results': results})
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e), 'results': []}, status=500)
 
 
 def api_layers_list(request):
     """
     API pour lister toutes les couches disponibles
-    Endpoint: /api/layers/
     """
+    print("📋 API layers_list appelée")
     layers = [
         {
-            'id': 'data',
-            'name': 'Data',
+            'id': 'arrets',
+            'name': 'Arrêts',
             'enabled': True,
-            'type': 'geojson',
-            'description': 'Données de mobilité',
-            'icon': '📊',
+            'type': 'markers',
+            'description': 'Arrêts de transport en commun',
+            'icon': '🚏',
             'config': {
-                'color': '#1a73e8',
-                'opacity': 0.7,
-                'weight': 2
+                'color': '#e74c3c',
+                'opacity': 1.0,
+                'iconSize': [25, 41]
+            }
+        },
+        {
+            'id': 'lignes',
+            'name': 'Lignes',
+            'enabled': False,
+            'type': 'geojson',
+            'description': 'Lignes de transport',
+            'icon': '🚌',
+            'config': {
+                'color': '#3498db',
+                'opacity': 0.8,
+                'weight': 3
             }
         },
         {
@@ -89,48 +125,36 @@ def api_layers_list(request):
             'description': 'Points d\'intérêt',
             'icon': '📍',
             'config': {
-                'color': '#e74c3c',
+                'color': '#2ecc71',
                 'opacity': 1.0,
                 'iconSize': [25, 41]
             }
         },
         {
-            'id': 'temp',
-            'name': 'Temp',
+            'id': 'zones',
+            'name': 'Zones',
             'enabled': False,
-            'type': 'heatmap',
-            'description': 'Données temporelles',
-            'icon': '🌡️',
+            'type': 'polygon',
+            'description': 'Zones d\'analyse',
+            'icon': '🔷',
             'config': {
-                'radius': 25,
-                'blur': 15,
-                'maxOpacity': 0.8
+                'fillColor': '#9b59b6',
+                'fillOpacity': 0.3,
+                'color': '#8e44ad',
+                'weight': 2
             }
         },
         {
             'id': 'background',
             'name': 'Background',
             'enabled': True,
+            'hasToggle': False,
             'type': 'tile',
-            'description': 'Fond de carte alternatif',
+            'description': 'Type de fond de carte',
             'icon': '🗺️',
             'config': {
                 'opacity': 1.0,
-                'variant': 'standard'
-            }
-        },
-        {
-            'id': 'zone',
-            'name': 'Zone',
-            'enabled': False,
-            'type': 'polygon',
-            'description': 'Zones d\'analyse',
-            'icon': '🔷',
-            'config': {
-                'fillColor': '#3498db',
-                'fillOpacity': 0.3,
-                'color': '#2980b9',
-                'weight': 2
+                'variant': 'Plan'
             }
         }
     ]
@@ -140,199 +164,104 @@ def api_layers_list(request):
 
 def api_layer_data(request, layer_id):
     """
-    API pour récupérer les données d'une couche spécifique
-    Endpoint: /api/layers/<id>/data/
+    API pour récupérer les données d'une couche depuis la base PostGIS
     """
+    print(f"🗺️ API layer_data appelée pour: {layer_id}")
     
-    # Données GeoJSON de démonstration
-    mock_data = {
-        'data': {
-            'type': 'FeatureCollection',
-            'features': [
-                {
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'LineString',
-                        'coordinates': [
-                            [5.7200, 43.4840],
-                            [5.7246, 43.4853],
-                            [5.7290, 43.4870]
-                        ]
-                    },
-                    'properties': {
-                        'name': 'Route principale',
-                        'traffic': 'high',
-                        'flow': 1250
-                    }
-                },
-                {
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'LineString',
-                        'coordinates': [
-                            [5.7246, 43.4853],
-                            [5.7250, 43.4890],
-                            [5.7260, 43.4920]
-                        ]
-                    },
-                    'properties': {
-                        'name': 'Route secondaire',
-                        'traffic': 'medium',
-                        'flow': 680
-                    }
+    try:
+        # Récupérer la bounding box depuis les paramètres
+        min_lng = float(request.GET.get('minLng', 5.70))
+        min_lat = float(request.GET.get('minLat', 43.47))
+        max_lng = float(request.GET.get('maxLng', 5.75))
+        max_lat = float(request.GET.get('maxLat', 43.50))
+        zoom = int(request.GET.get('zoom', 14))
+        
+        print(f"📍 BBox: [{min_lng}, {min_lat}, {max_lng}, {max_lat}] @ zoom {zoom}")
+        
+        bbox = (min_lng, min_lat, max_lng, max_lat)
+        
+        # Connecter à la base de données
+        if not db_manager.connect():
+            print("❌ Échec de connexion à la base de données")
+            return JsonResponse({
+                'type': 'FeatureCollection',
+                'features': [],
+                'error': 'Connexion à la base de données échouée'
+            }, status=500)
+        
+        data = None
+        
+        try:
+            if layer_id == 'arrets':
+                type_filter = request.GET.get('type', None)
+                print(f"🚏 Récupération des arrêts (type: {type_filter})")
+                data = db_manager.get_arrets(bbox, type_filter)
+                
+            elif layer_id == 'lignes':
+                type_filter = request.GET.get('type', None)
+                print(f"🚌 Récupération des lignes (type: {type_filter})")
+                data = db_manager.get_lignes(bbox, type_filter)
+                
+            elif layer_id == 'poi':
+                poi_type = request.GET.get('type', None)
+                print(f"📍 Récupération des POI (type: {poi_type})")
+                data = db_manager.get_poi(bbox, poi_type)
+                
+            elif layer_id == 'zones':
+                zone_type = request.GET.get('type', None)
+                print(f"🔷 Récupération des zones (type: {zone_type})")
+                data = db_manager.get_zones(bbox, zone_type)
+            
+            else:
+                print(f"⚠️ Couche inconnue: {layer_id}")
+                return JsonResponse({'error': 'Couche non trouvée'}, status=404)
+            
+            # Si pas de données, retourner un GeoJSON vide
+            if data is None:
+                print(f"⚠️ Aucune donnée retournée pour {layer_id}")
+                data = {
+                    'type': 'FeatureCollection',
+                    'features': []
                 }
-            ]
-        },
-        'poi': {
-            'type': 'FeatureCollection',
-            'features': [
-                {
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'Point',
-                        'coordinates': [5.7246, 43.4853]
-                    },
-                    'properties': {
-                        'name': 'Mairie de Pourrières',
-                        'type': 'administration',
-                        'description': 'Hôtel de ville'
-                    }
-                },
-                {
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'Point',
-                        'coordinates': [5.7251, 43.4858]
-                    },
-                    'properties': {
-                        'name': 'École élémentaire',
-                        'type': 'education',
-                        'description': 'Établissement scolaire'
-                    }
-                },
-                {
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'Point',
-                        'coordinates': [5.7245, 43.4851]
-                    },
-                    'properties': {
-                        'name': 'Place du village',
-                        'type': 'public',
-                        'description': 'Espace public central'
-                    }
-                }
-            ]
-        },
-        'zone': {
-            'type': 'FeatureCollection',
-            'features': [
-                {
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'Polygon',
-                        'coordinates': [[
-                            [5.7146, 43.4903],
-                            [5.7346, 43.4903],
-                            [5.7346, 43.4803],
-                            [5.7146, 43.4803],
-                            [5.7146, 43.4903]
-                        ]]
-                    },
-                    'properties': {
-                        'name': 'Zone d\'analyse principale',
-                        'type': 'primary',
-                        'population': 3850
-                    }
-                },
-                {
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'Polygon',
-                        'coordinates': [[
-                            [5.7180, 43.4880],
-                            [5.7280, 43.4880],
-                            [5.7280, 43.4820],
-                            [5.7180, 43.4820],
-                            [5.7180, 43.4880]
-                        ]]
-                    },
-                    'properties': {
-                        'name': 'Zone résidentielle',
-                        'type': 'residential',
-                        'population': 1250
-                    }
-                }
-            ]
-        }
-    }
-    
-    if layer_id in mock_data:
-        return JsonResponse(mock_data[layer_id])
-    
-    return JsonResponse({'error': 'Couche non trouvée'}, status=404)
+            
+            print(f"✅ {len(data.get('features', []))} features retournées pour {layer_id}")
+            return JsonResponse(data, safe=False)
+            
+        except Exception as e:
+            print(f"❌ Erreur lors de la récupération des données: {e}")
+            traceback.print_exc()
+            return JsonResponse({
+                'type': 'FeatureCollection',
+                'features': [],
+                'error': str(e)
+            }, status=500)
+        
+    except ValueError as e:
+        print(f"❌ Paramètres invalides: {e}")
+        return JsonResponse({'error': f'Paramètres invalides: {str(e)}'}, status=400)
+    except Exception as e:
+        print(f"❌ Erreur générale: {e}")
+        traceback.print_exc()
+        return JsonResponse({'error': str(e)}, status=500)
+    finally:
+        db_manager.disconnect()
 
 
 def api_layer_config(request, layer_id):
     """
     API pour récupérer la configuration détaillée d'une couche
-    Endpoint: /api/layers/<id>/config/
     """
-    
     configs = {
-        'data': {
-            'id': 'data',
-            'name': 'Data',
-            'parameters': [
-                {
-                    'name': 'color',
-                    'label': 'Couleur',
-                    'type': 'color',
-                    'value': '#1a73e8'
-                },
-                {
-                    'name': 'opacity',
-                    'label': 'Opacité',
-                    'type': 'range',
-                    'min': 0,
-                    'max': 1,
-                    'step': 0.1,
-                    'value': 0.7
-                },
-                {
-                    'name': 'weight',
-                    'label': 'Épaisseur',
-                    'type': 'range',
-                    'min': 1,
-                    'max': 10,
-                    'step': 1,
-                    'value': 2
-                }
-            ],
-            'filters': [
-                {
-                    'name': 'traffic',
-                    'label': 'Niveau de trafic',
-                    'type': 'select',
-                    'options': ['all', 'high', 'medium', 'low'],
-                    'value': 'all'
-                }
-            ],
-            'info': {
-                'source': 'Données de mobilité territoriale',
-                'lastUpdate': '2025-10-25',
-                'coverage': 'Commune de Pourrières'
-            }
-        },
-        'poi': {
-            'id': 'poi',
-            'name': 'POI',
+        'arrets': {
+            'id': 'arrets',
+            'name': 'Arrêts',
+            'icon': '🚏',
             'parameters': [
                 {
                     'name': 'iconSize',
                     'label': 'Taille des icônes',
                     'type': 'range',
-                    'min': 10,
+                    'min': 15,
                     'max': 50,
                     'step': 5,
                     'value': 25
@@ -347,75 +276,151 @@ def api_layer_config(request, layer_id):
             'filters': [
                 {
                     'name': 'type',
-                    'label': 'Type de POI',
-                    'type': 'multiselect',
-                    'options': ['administration', 'education', 'public', 'commercial'],
-                    'value': ['administration', 'education', 'public']
+                    'label': 'Type de transport',
+                    'type': 'select',
+                    'options': ['Tous', 'Bus', 'Tram', 'Métro', 'Train'],
+                    'value': 'Tous'
                 }
             ],
             'info': {
-                'source': 'Base OpenStreetMap + données locales',
-                'count': 47,
-                'types': 'Administration, éducation, commerce, loisirs'
+                'source': 'Base de données PostGIS',
+                'description': 'Arrêts de transport en commun'
             }
         },
-        'temp': {
-            'id': 'temp',
-            'name': 'Temp',
+        'lignes': {
+            'id': 'lignes',
+            'name': 'Lignes',
+            'icon': '🚌',
             'parameters': [
                 {
-                    'name': 'radius',
-                    'label': 'Rayon',
-                    'type': 'range',
-                    'min': 10,
-                    'max': 50,
-                    'step': 5,
-                    'value': 25
+                    'name': 'color',
+                    'label': 'Couleur',
+                    'type': 'color',
+                    'value': '#3498db'
                 },
                 {
-                    'name': 'blur',
-                    'label': 'Flou',
-                    'type': 'range',
-                    'min': 5,
-                    'max': 30,
-                    'step': 5,
-                    'value': 15
-                },
-                {
-                    'name': 'maxOpacity',
-                    'label': 'Opacité maximale',
+                    'name': 'opacity',
+                    'label': 'Opacité',
                     'type': 'range',
                     'min': 0,
                     'max': 1,
                     'step': 0.1,
                     'value': 0.8
+                },
+                {
+                    'name': 'weight',
+                    'label': 'Épaisseur',
+                    'type': 'range',
+                    'min': 1,
+                    'max': 10,
+                    'step': 1,
+                    'value': 3
                 }
             ],
             'filters': [
                 {
-                    'name': 'timeRange',
-                    'label': 'Période',
-                    'type': 'select',
-                    'options': ['hour', 'day', 'week', 'month'],
-                    'value': 'day'
+                    'name': 'type',
+                    'label': 'Type de transport',
+                    'type': 'multiselect',
+                    'options': ['Bus', 'Tram', 'Métro', 'Train'],
+                    'value': ['Bus', 'Tram']
                 }
             ],
             'info': {
-                'source': 'Données temporelles agrégées',
-                'resolution': 'Horaire',
-                'period': 'Derniers 30 jours'
+                'source': 'Base de données PostGIS',
+                'description': 'Lignes de transport en commun'
+            }
+        },
+        'poi': {
+            'id': 'poi',
+            'name': 'POI',
+            'icon': '📍',
+            'parameters': [
+                {
+                    'name': 'iconSize',
+                    'label': 'Taille des icônes',
+                    'type': 'range',
+                    'min': 15,
+                    'max': 50,
+                    'step': 5,
+                    'value': 25
+                }
+            ],
+            'filters': [
+                {
+                    'name': 'type',
+                    'label': 'Type de POI',
+                    'type': 'select',
+                    'options': ['Tous', 'Commerce', 'Service', 'Loisir', 'Autre'],
+                    'value': 'Tous'
+                }
+            ],
+            'info': {
+                'source': 'Base de données PostGIS',
+                'description': 'Points d\'intérêt'
+            }
+        },
+        'zones': {
+            'id': 'zones',
+            'name': 'Zones',
+            'icon': '🔷',
+            'parameters': [
+                {
+                    'name': 'fillColor',
+                    'label': 'Couleur de remplissage',
+                    'type': 'color',
+                    'value': '#9b59b6'
+                },
+                {
+                    'name': 'fillOpacity',
+                    'label': 'Opacité du remplissage',
+                    'type': 'range',
+                    'min': 0,
+                    'max': 1,
+                    'step': 0.1,
+                    'value': 0.3
+                },
+                {
+                    'name': 'color',
+                    'label': 'Couleur du contour',
+                    'type': 'color',
+                    'value': '#8e44ad'
+                },
+                {
+                    'name': 'weight',
+                    'label': 'Épaisseur du contour',
+                    'type': 'range',
+                    'min': 1,
+                    'max': 5,
+                    'step': 1,
+                    'value': 2
+                }
+            ],
+            'filters': [
+                {
+                    'name': 'type',
+                    'label': 'Type de zone',
+                    'type': 'select',
+                    'options': ['Toutes', 'Résidentielle', 'Commerciale', 'Industrielle'],
+                    'value': 'Toutes'
+                }
+            ],
+            'info': {
+                'source': 'Base de données PostGIS',
+                'description': 'Zones géographiques'
             }
         },
         'background': {
             'id': 'background',
             'name': 'Background',
+            'icon': '🗺️',
             'parameters': [
                 {
                     'name': 'variant',
-                    'label': 'Variante',
+                    'label': 'Type de carte',
                     'type': 'select',
-                    'options': ['standard', 'satellite', 'terrain', 'dark'],
-                    'value': 'standard'
+                    'options': ['Plan', 'Sombre', 'Satellite', 'Topographique'],
+                    'value': 'Plan'
                 },
                 {
                     'name': 'opacity',
@@ -430,57 +435,7 @@ def api_layer_config(request, layer_id):
             'filters': [],
             'info': {
                 'source': 'OpenStreetMap',
-                'attribution': '© OpenStreetMap contributors'
-            }
-        },
-        'zone': {
-            'id': 'zone',
-            'name': 'Zone',
-            'parameters': [
-                {
-                    'name': 'fillColor',
-                    'label': 'Couleur de remplissage',
-                    'type': 'color',
-                    'value': '#3498db'
-                },
-                {
-                    'name': 'fillOpacity',
-                    'label': 'Opacité du remplissage',
-                    'type': 'range',
-                    'min': 0,
-                    'max': 1,
-                    'step': 0.1,
-                    'value': 0.3
-                },
-                {
-                    'name': 'strokeColor',
-                    'label': 'Couleur du contour',
-                    'type': 'color',
-                    'value': '#2980b9'
-                },
-                {
-                    'name': 'weight',
-                    'label': 'Épaisseur du contour',
-                    'type': 'range',
-                    'min': 1,
-                    'max': 5,
-                    'step': 1,
-                    'value': 2
-                }
-            ],
-            'filters': [
-                {
-                    'name': 'zoneType',
-                    'label': 'Type de zone',
-                    'type': 'multiselect',
-                    'options': ['primary', 'residential', 'commercial', 'industrial'],
-                    'value': ['primary', 'residential']
-                }
-            ],
-            'info': {
-                'source': 'Zonage territorial',
-                'count': 12,
-                'totalArea': '25.4 km²'
+                'description': 'Fond de carte'
             }
         }
     }

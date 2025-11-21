@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Console Base de Données - MobiFlux</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/console.css">
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Retour à l'accueil</a>
+        
+        <header class="header">
+            <h1>💾 Console Base de Données</h1>
+        </header>
+        
+        <main class="console-content">
+            <form method="POST" action="">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="query">Entrez votre commande SQL :</label>
+                    <textarea id="query" name="query" placeholder="SELECT * FROM table_name;">{{ query }}</textarea>
+                </div>
+                <button type="submit" class="btn-primary">Exécuter</button>
+            </form>
+
+            {% if result %}
+            <div class="result-box success">
+                <strong>✅ Résultat :</strong>
+                <pre>{{ result }}</pre>
+            </div>
+            {% endif %}
+
+            {% if error %}
+            <div class="result-box error">
+                <strong>❌ Erreur :</strong>
+                <pre>{{ error }}</pre>
+            </div>
+            {% endif %}
+        </main>
+    </div>
+</body>
+</html>

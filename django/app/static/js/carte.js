@@ -1,6 +1,5 @@
 /**
  * Gestionnaire de carte interactive avec Leaflet et OpenStreetMap
- * Gère les couches, la recherche et les interactions utilisateur
  */
 
 class MapController {
@@ -10,6 +9,7 @@ class MapController {
         this.layers = {};
         this.layerGroups = {};
         this.currentDetailLayer = null;
+        this.baseTileLayer = null;
         
         this.init();
     }
@@ -27,19 +27,45 @@ class MapController {
      * Initialisation de la carte Leaflet
      */
     initMap() {
-        // Création de la carte
         this.map = L.map('map').setView(
             this.config.defaultCenter,
             this.config.defaultZoom
         );
         
-        // Ajout de la couche de tuiles OSM
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        this.baseTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '© OpenStreetMap contributors'
         }).addTo(this.map);
         
-        console.log('Carte initialisée');
+        // Recharger les données quand la carte bouge
+        this.map.on('moveend', () => {
+            this.reloadVisibleLayers();
+        });
+    }
+    
+    /**
+     * Recharger les couches visibles avec la nouvelle bbox
+     */
+    reloadVisibleLayers() {
+        for (const layerId in this.layers) {
+            if (this.layers[layerId].enabled && layerId !== 'background') {
+                this.loadLayerData(layerId);
+            }
+        }
+    }
+    
+    /**
+     * Obtenir la bounding box actuelle de la carte
+     */
+    getCurrentBounds() {
+        const bounds = this.map.getBounds();
+        return {
+            minLng: bounds.getWest(),
+            minLat: bounds.getSouth(),
+            maxLng: bounds.getEast(),
+            maxLat: bounds.getNorth(),
+            zoom: this.map.getZoom()
+        };
     }
     
     /**
@@ -47,8 +73,15 @@ class MapController {
      */
     async loadLayers() {
         try {
+            console.log('📋 Chargement des couches...');
             const response = await fetch(this.config.apiEndpoints.layers);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
             const data = await response.json();
+            console.log('✅ Couches chargées:', data);
             
             this.layers = {};
             data.layers.forEach(layer => {
@@ -59,13 +92,14 @@ class MapController {
             
             // Charger les données des couches activées par défaut
             for (const layerId in this.layers) {
-                if (this.layers[layerId].enabled) {
+                if (this.layers[layerId].enabled && layerId !== 'background') {
+                    console.log(`🔄 Chargement initial de la couche: ${layerId}`);
                     await this.loadLayerData(layerId);
                 }
             }
             
         } catch (error) {
-            console.error('Erreur lors du chargement des couches:', error);
+            console.error('❌ Erreur lors du chargement des couches:', error);
             this.showError('Impossible de charger les couches');
         }
     }
@@ -84,21 +118,26 @@ class MapController {
             layerItem.className = 'layer-item';
             layerItem.dataset.layerId = layerId;
             
+            // Afficher le toggle seulement si hasToggle n'est pas false
+            const toggleHTML = layer.hasToggle !== false ? `
+                <label class="toggle-switch">
+                    <input 
+                        type="checkbox" 
+                        class="layer-toggle"
+                        data-layer-id="${layerId}"
+                        ${layer.enabled ? 'checked' : ''}
+                    >
+                    <span class="toggle-slider"></span>
+                </label>
+            ` : '';
+            
             layerItem.innerHTML = `
                 <div class="layer-header">
                     <div class="layer-info" data-layer-id="${layerId}">
                         <span class="layer-icon">${layer.icon}</span>
                         <span class="layer-name">${layer.name}</span>
                     </div>
-                    <label class="toggle-switch">
-                        <input 
-                            type="checkbox" 
-                            class="layer-toggle"
-                            data-layer-id="${layerId}"
-                            ${layer.enabled ? 'checked' : ''}
-                        >
-                        <span class="toggle-slider"></span>
-                    </label>
+                    ${toggleHTML}
                 </div>
                 <div class="layer-description">${layer.description}</div>
             `;
@@ -148,10 +187,45 @@ class MapController {
      * Chargement des données d'une couche
      */
     async loadLayerData(layerId) {
+        console.log(`🗺️ Chargement des données pour: ${layerId}`);
+        
         try {
-            const url = this.config.apiEndpoints.layerData.replace('{id}', layerId);
+            // Construire l'URL avec la bounding box
+            const bounds = this.getCurrentBounds();
+            const params = new URLSearchParams({
+                minLng: bounds.minLng,
+                minLat: bounds.minLat,
+                maxLng: bounds.maxLng,
+                maxLat: bounds.maxLat,
+                zoom: bounds.zoom
+            });
+            
+            // Ajouter les filtres si ils existent
+            const layer = this.layers[layerId];
+            if (layer.filters) {
+                layer.filters.forEach(filter => {
+                    if (filter.value && filter.value !== 'Tous' && filter.value !== 'Toutes') {
+                        params.append(filter.name, filter.value);
+                    }
+                });
+            }
+            
+            const url = `${this.config.apiEndpoints.layerData.replace('{id}', layerId)}?${params}`;
+            console.log(`📡 Requête API: ${url}`);
+            
             const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const data = await response.json();
+            console.log(`✅ Données reçues pour ${layerId}:`, data);
+            
+            if (data.error) {
+                console.warn(`⚠️ Erreur API pour ${layerId}:`, data.error);
+                return;
+            }
             
             // Supprimer l'ancienne couche si elle existe
             if (this.layerGroups[layerId]) {
@@ -161,63 +235,75 @@ class MapController {
             // Créer un nouveau groupe de couches
             this.layerGroups[layerId] = L.layerGroup();
             
-            const layer = this.layers[layerId];
             const config = layer.config;
             
             // Afficher les données selon le type de couche
-            if (layer.type === 'geojson' || layer.type === 'polygon') {
-                L.geoJSON(data, {
-                    style: {
-                        color: config.color || '#1a73e8',
-                        weight: config.weight || 2,
-                        opacity: config.opacity || 0.7,
-                        fillColor: config.fillColor || config.color,
-                        fillOpacity: config.fillOpacity || 0.3
-                    },
-                    onEachFeature: (feature, layer) => {
+            if (data.features && data.features.length > 0) {
+                console.log(`📍 Affichage de ${data.features.length} features pour ${layerId}`);
+                
+                if (layer.type === 'geojson' || layer.type === 'polygon') {
+                    L.geoJSON(data, {
+                        style: {
+                            color: config.color || '#1a73e8',
+                            weight: config.weight || 2,
+                            opacity: config.opacity || 0.7,
+                            fillColor: config.fillColor || config.color,
+                            fillOpacity: config.fillOpacity || 0.3
+                        },
+                        onEachFeature: (feature, layer) => {
+                            if (feature.properties) {
+                                layer.bindPopup(this.createPopupContent(feature.properties));
+                            }
+                        }
+                    }).addTo(this.layerGroups[layerId]);
+                    
+                } else if (layer.type === 'markers') {
+                    data.features.forEach(feature => {
+                        const coords = feature.geometry.coordinates;
+                        const marker = L.marker([coords[1], coords[0]]);
+                        
                         if (feature.properties) {
-                            const props = feature.properties;
-                            let popupContent = '<div class="popup-content">';
-                            for (const key in props) {
-                                popupContent += `<p><strong>${key}:</strong> ${props[key]}</p>`;
-                            }
-                            popupContent += '</div>';
-                            layer.bindPopup(popupContent);
+                            marker.bindPopup(this.createPopupContent(feature.properties));
                         }
-                    }
-                }).addTo(this.layerGroups[layerId]);
-            } else if (layer.type === 'markers') {
-                data.features.forEach(feature => {
-                    const coords = feature.geometry.coordinates;
-                    const marker = L.marker([coords[1], coords[0]]);
-                    
-                    if (feature.properties) {
-                        const props = feature.properties;
-                        let popupContent = '<div class="popup-content">';
-                        if (props.name) {
-                            popupContent += `<h4>${props.name}</h4>`;
-                        }
-                        for (const key in props) {
-                            if (key !== 'name') {
-                                popupContent += `<p><strong>${key}:</strong> ${props[key]}</p>`;
-                            }
-                        }
-                        popupContent += '</div>';
-                        marker.bindPopup(popupContent);
-                    }
-                    
-                    marker.addTo(this.layerGroups[layerId]);
-                });
+                        
+                        marker.addTo(this.layerGroups[layerId]);
+                    });
+                }
+                
+                // Ajouter le groupe de couches à la carte
+                this.layerGroups[layerId].addTo(this.map);
+                console.log(`✅ Couche ${layerId} affichée avec succès`);
+            } else {
+                console.log(`ℹ️ Aucune donnée à afficher pour ${layerId}`);
             }
             
-            // Ajouter le groupe de couches à la carte
-            this.layerGroups[layerId].addTo(this.map);
-            
-            console.log(`Couche ${layerId} chargée`);
-            
         } catch (error) {
-            console.error(`Erreur lors du chargement de la couche ${layerId}:`, error);
+            console.error(`❌ Erreur chargement couche ${layerId}:`, error);
+            alert(`Erreur lors du chargement de la couche ${layerId}: ${error.message}`);
         }
+    }
+    
+    /**
+     * Créer le contenu HTML d'une popup
+     */
+    createPopupContent(properties) {
+        let content = '<div class="popup-content">';
+        
+        // Titre si nom disponible
+        if (properties.nom || properties.name) {
+            content += `<h4>${properties.nom || properties.name}</h4>`;
+        }
+        
+        // Autres propriétés
+        for (const key in properties) {
+            if (key !== 'nom' && key !== 'name' && key !== 'feature_type') {
+                const label = key.charAt(0).toUpperCase() + key.slice(1);
+                content += `<p><strong>${label}:</strong> ${properties[key]}</p>`;
+            }
+        }
+        
+        content += '</div>';
+        return content;
     }
     
     /**
@@ -226,7 +312,6 @@ class MapController {
     hideLayerData(layerId) {
         if (this.layerGroups[layerId]) {
             this.map.removeLayer(this.layerGroups[layerId]);
-            console.log(`Couche ${layerId} masquée`);
         }
     }
     
@@ -285,7 +370,7 @@ class MapController {
             this.setupDetailEvents(layerId);
             
         } catch (error) {
-            console.error(`Erreur lors du chargement des détails de la couche ${layerId}:`, error);
+            // Erreur silencieuse
         }
     }
     
@@ -372,12 +457,82 @@ class MapController {
         // Mettre à jour la configuration de la couche
         this.layers[layerId].config[paramName] = value;
         
-        // Recharger les données de la couche avec les nouveaux paramètres
-        if (this.layers[layerId].enabled) {
-            this.loadLayerData(layerId);
+        // Si c'est un filtre, le sauvegarder aussi
+        const layer = this.layers[layerId];
+        if (layer.filters) {
+            const filter = layer.filters.find(f => f.name === paramName);
+            if (filter) {
+                filter.value = value;
+            }
         }
         
-        console.log(`Paramètre ${paramName} de la couche ${layerId} mis à jour:`, value);
+        // Cas spécial pour la couche background
+        if (layerId === 'background') {
+            if (paramName === 'variant') {
+                this.changeBaseTiles(value);
+            } else if (paramName === 'opacity') {
+                if (this.baseTileLayer) {
+                    this.baseTileLayer.setOpacity(value);
+                }
+            }
+        } else {
+            // Recharger les données de la couche avec les nouveaux paramètres
+            if (this.layers[layerId].enabled) {
+                this.loadLayerData(layerId);
+            }
+        }
+    }
+    
+    /**
+     * Obtenir la configuration des tuiles selon le type
+     */
+    getTileConfig(variant) {
+        const configs = {
+            'Plan': {
+                url: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+                attribution: '© OpenStreetMap France | © OpenStreetMap contributors',
+                maxZoom: 20
+            },
+            'Sombre': {
+                url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                attribution: '© OpenStreetMap contributors © CARTO',
+                maxZoom: 19,
+                subdomains: 'abcd'
+            },
+            'Satellite': {
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+                maxZoom: 19
+            },
+            'Topographique': {
+                url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+                attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)',
+                maxZoom: 17
+            }
+        };
+        
+        return configs[variant] || configs['Plan'];
+    }
+    
+    /**
+     * Changer les tuiles de base de la carte
+     */
+    changeBaseTiles(variant) {
+        // Supprimer l'ancienne couche de tuiles
+        if (this.baseTileLayer) {
+            this.map.removeLayer(this.baseTileLayer);
+        }
+        
+        // Obtenir la configuration du nouveau type de tuiles
+        const config = this.getTileConfig(variant);
+        
+        // Créer et ajouter la nouvelle couche de tuiles
+        this.baseTileLayer = L.tileLayer(config.url, {
+            attribution: config.attribution,
+            maxZoom: config.maxZoom,
+            subdomains: config.subdomains || 'abc',
+            opacity: this.layers['background']?.config?.opacity || 1.0
+        }).addTo(this.map);
     }
     
     /**
@@ -392,6 +547,35 @@ class MapController {
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 this.performSearch();
+            }
+        });
+        
+        // Autocomplétion : écouter les saisies dans le champ de recherche
+        let searchTimeout = null;
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            
+            // Annuler le délai précédent
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            // Si la requête est trop courte, masquer les suggestions
+            if (query.length < 3) {
+                this.hideSuggestions();
+                return;
+            }
+            
+            // Attendre 300ms après la dernière frappe avant de chercher
+            searchTimeout = setTimeout(() => {
+                this.fetchSuggestions(query);
+            }, 300);
+        });
+        
+        // Fermeture des suggestions en cliquant ailleurs
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-section')) {
+                this.hideSuggestions();
             }
         });
         
@@ -413,39 +597,193 @@ class MapController {
     }
     
     /**
+     * Récupérer les suggestions de recherche
+     */
+    async fetchSuggestions(query) {
+        try {
+            // Attendre un peu pour respecter la politique de Nominatim
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            // Utiliser l'API Nominatim pour les suggestions
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
+            
+            const response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                return;
+            }
+            
+            const data = await response.json();
+            
+            if (data && data.length > 0) {
+                this.displaySuggestions(data);
+            } else {
+                this.hideSuggestions();
+            }
+            
+        } catch (error) {
+            // Erreur silencieuse
+        }
+    }
+    
+    /**
+     * Afficher les suggestions
+     */
+    displaySuggestions(suggestions) {
+        const searchResults = document.getElementById('searchResults');
+        searchResults.innerHTML = '';
+        
+        suggestions.forEach(suggestion => {
+            const item = document.createElement('div');
+            item.className = 'suggestion-item';
+            item.innerHTML = `
+                <div class="suggestion-icon">📍</div>
+                <div class="suggestion-text">
+                    <div class="suggestion-name">${this.highlightMatch(suggestion.display_name)}</div>
+                    <div class="suggestion-type">${this.getSuggestionType(suggestion)}</div>
+                </div>
+            `;
+            
+            item.addEventListener('click', () => {
+                this.selectSuggestion(suggestion);
+            });
+            
+            searchResults.appendChild(item);
+        });
+        
+        searchResults.classList.remove('hidden');
+    }
+    
+    /**
+     * Masquer les suggestions
+     */
+    hideSuggestions() {
+        const searchResults = document.getElementById('searchResults');
+        searchResults.classList.add('hidden');
+        searchResults.innerHTML = '';
+    }
+    
+    /**
+     * Sélectionner une suggestion
+     */
+    selectSuggestion(suggestion) {
+        const searchInput = document.getElementById('searchInput');
+        searchInput.value = suggestion.display_name;
+        
+        const lat = parseFloat(suggestion.lat);
+        const lng = parseFloat(suggestion.lon);
+        
+        // Recentrer la carte
+        this.map.setView([lat, lng], 15);
+        
+        // Ajouter un marqueur
+        if (this.searchMarker) {
+            this.map.removeLayer(this.searchMarker);
+        }
+        
+        this.searchMarker = L.marker([lat, lng])
+            .addTo(this.map)
+            .bindPopup(`<strong>${suggestion.display_name}</strong>`)
+            .openPopup();
+        
+        // Masquer les suggestions
+        this.hideSuggestions();
+    }
+    
+    /**
+     * Mettre en évidence la correspondance dans le texte
+     */
+    highlightMatch(text) {
+        // Pour l'instant, retourner le texte tel quel
+        // On pourrait améliorer en mettant en évidence la requête
+        return text;
+    }
+    
+    /**
+     * Obtenir le type de suggestion
+     */
+    getSuggestionType(suggestion) {
+        if (suggestion.type) {
+            const types = {
+                'city': '🏙️ Ville',
+                'town': '🏘️ Ville',
+                'village': '🏡 Village',
+                'hamlet': '🏠 Hameau',
+                'administrative': '🏛️ Administratif',
+                'road': '🛣️ Route',
+                'house': '🏠 Adresse',
+                'building': '🏢 Bâtiment',
+                'suburb': '🏘️ Quartier',
+                'neighbourhood': '🏘️ Quartier'
+            };
+            return types[suggestion.type] || suggestion.type;
+        }
+        return suggestion.class || '';
+    }
+    
+    /**
      * Effectuer une recherche de lieu
      */
     async performSearch() {
         const searchInput = document.getElementById('searchInput');
         const query = searchInput.value.trim();
         
-        if (!query) return;
+        if (!query) {
+            return;
+        }
         
         const searchResults = document.getElementById('searchResults');
         searchResults.innerHTML = '<div class="loading">Recherche en cours...</div>';
         searchResults.classList.remove('hidden');
         
         try {
-            const response = await fetch(`${this.config.apiEndpoints.search}?q=${encodeURIComponent(query)}`);
+            // Attendre 1 seconde pour respecter la politique de Nominatim
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Utiliser l'API Nominatim d'OpenStreetMap
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
+            
+            const response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
             
-            if (data.success && data.result) {
-                const result = data.result;
+            if (data && data.length > 0) {
+                const result = data[0];
+                
+                const lat = parseFloat(result.lat);
+                const lng = parseFloat(result.lon);
+                
+                // Vérifier que les coordonnées sont valides
+                if (isNaN(lat) || isNaN(lng)) {
+                    throw new Error('Coordonnées invalides');
+                }
                 
                 // Recentrer la carte
-                this.map.setView([result.lat, result.lng], result.zoom || this.config.defaultZoom);
+                this.map.setView([lat, lng], 13);
                 
                 // Ajouter un marqueur temporaire
                 if (this.searchMarker) {
                     this.map.removeLayer(this.searchMarker);
                 }
                 
-                this.searchMarker = L.marker([result.lat, result.lng])
+                this.searchMarker = L.marker([lat, lng])
                     .addTo(this.map)
-                    .bindPopup(`<strong>${result.name}</strong>`)
+                    .bindPopup(`<strong>${result.display_name}</strong>`)
                     .openPopup();
                 
-                searchResults.innerHTML = `<div class="success">📍 ${result.name}</div>`;
+                searchResults.innerHTML = `<div class="success">📍 ${result.display_name}</div>`;
                 
                 // Masquer les résultats après 3 secondes
                 setTimeout(() => {
@@ -453,12 +791,17 @@ class MapController {
                 }, 3000);
                 
             } else {
-                searchResults.innerHTML = `<div class="error">${data.message || 'Aucun résultat trouvé'}</div>`;
+                searchResults.innerHTML = '<div class="error">Aucun résultat trouvé</div>';
+                setTimeout(() => {
+                    searchResults.classList.add('hidden');
+                }, 3000);
             }
             
         } catch (error) {
-            console.error('Erreur lors de la recherche:', error);
-            searchResults.innerHTML = '<div class="error">Erreur lors de la recherche</div>';
+            searchResults.innerHTML = `<div class="error">Erreur lors de la recherche</div>`;
+            setTimeout(() => {
+                searchResults.classList.add('hidden');
+            }, 3000);
         }
     }
     
@@ -485,9 +828,5 @@ class MapController {
 // Initialisation au chargement de la page
 document.addEventListener('DOMContentLoaded', () => {
     const mapController = new MapController(MAP_CONFIG);
-    
-    // Exposer globalement pour le débogage
     window.mapController = mapController;
-    
-    console.log('Application de carte initialisée');
 });

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Spark - MobiFlux</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/console.css">
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Retour à l'accueil</a>
+        
+        <header class="header">
+            <h1>⚡ Spark Job - Upper Case</h1>
+        </header>
+        
+        <main class="console-content">
+            <div class="info-box">
+                <strong>ℹ️ Information :</strong>
+                Ce job Spark transforme du texte en majuscules en utilisant Apache Spark distribué.
+            </div>
+
+            <form method="POST" action="">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="input_text">Texte à transformer :</label>
+                    <input type="text" 
+                           id="input_text" 
+                           name="input_text" 
+                           value="{{ input_text }}" 
+                           placeholder="Entrez votre texte...">
+                </div>
+                <button type="submit" class="btn-primary">Exécuter le Job Spark</button>
+            </form>
+
+            {% if loading %}
+            <div class="result-box loading">
+                <strong>⏳ Exécution en cours...</strong>
+                <p>Le job Spark est en cours d'exécution. Veuillez patienter...</p>
+            </div>
+            {% endif %}
+
+            {% if result %}
+            <div class="result-box success">
+                <strong>✅ Résultat du Job Spark :</strong>
+                <div class="spark-result">
+                    <p><strong>Entrée :</strong> {{ input_text }}</p>
+                    <p><strong>Sortie :</strong> {{ result }}</p>
+                </div>
+                <details>
+                    <summary>📊 Logs complets</summary>
+                    <pre>{{ full_output }}</pre>
+                </details>
+            </div>
+            {% endif %}
+
+            {% if error %}
+            <div class="result-box error">
+                <strong>❌ Erreur d'exécution :</strong>
+                <pre>{{ error }}</pre>
+            </div>
+            {% endif %}
+        </main>
+    </div>
+</body>
+</html>
