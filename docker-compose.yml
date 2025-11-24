@@ -107,6 +107,10 @@ services:
     command: python manage.py runserver 0.0.0.0:8000
     ports:
       - "8000:8000"
+    volumes:
+      - ./django/app:/app
+      - /var/run/docker.sock:/var/run/docker.sock  # Permet d’accéder à docker depuis Django
+
     env_file:
       - .env
     depends_on:
@@ -116,6 +120,7 @@ services:
         condition: service_healthy
     networks:
       - mobility-network
+
 
   preprocess:
     build:

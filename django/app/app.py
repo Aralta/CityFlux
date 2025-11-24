@@ -14,18 +14,32 @@ BASE_DIR = os.path.dirname(__file__) or '.'
 
 if not settings.configured:
     settings.configure(
-        DEBUG=True,
+        DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField",
+        DEBUG=True, #passer a False en prod
         SECRET_KEY='dev-secret-key-mobiflux',
         ROOT_URLCONF=__name__,
         ALLOWED_HOSTS=['*'],
-        MIDDLEWARE=[
+        MIDDLEWARE = [
+            'django.middleware.security.SecurityMiddleware',
+            'django.contrib.sessions.middleware.SessionMiddleware',
             'django.middleware.common.CommonMiddleware',
             'django.middleware.csrf.CsrfViewMiddleware',
+            'django.contrib.auth.middleware.AuthenticationMiddleware',
+            'django.contrib.messages.middleware.MessageMiddleware',
         ],
+
         INSTALLED_APPS=[
-            'django.contrib.staticfiles',
+            'django.contrib.admin',
+            'django.contrib.auth',
             'django.contrib.contenttypes',
+            'django.contrib.sessions',
+            'django.contrib.messages',
+            'django.contrib.staticfiles',
+
+            'imports',
         ],
+
+
         DATABASES={
             'default': {
                 'ENGINE': 'django.db.backends.postgresql',
@@ -36,7 +50,7 @@ if not settings.configured:
                 'PORT': os.environ.get('SQL_PORT', '5432'),
             }
         },
-        TEMPLATES=[{
+        TEMPLATES = [{
             'BACKEND': 'django.template.backends.django.DjangoTemplates',
             'DIRS': [os.path.join(BASE_DIR, 'templates')],
             'APP_DIRS': True,
@@ -45,25 +59,38 @@ if not settings.configured:
                     'django.template.context_processors.debug',
                     'django.template.context_processors.request',
                     'django.template.context_processors.csrf',
+                    'django.contrib.auth.context_processors.auth',       # 🔥 OBLIGATOIRE
+                    'django.contrib.messages.context_processors.messages',  # 🔥 OBLIGATOIRE
                 ],
             },
         }],
+
         STATIC_URL='/static/',
         STATICFILES_DIRS=[os.path.join(BASE_DIR, 'static')],
+
+        MEDIA_URL = "/media/",
+        MEDIA_ROOT = os.path.join(BASE_DIR, "media")
     )
 
 django.setup()
 
 from views.carte import carte_view, api_search, api_layers_list, api_layer_data, api_layer_config
 from views.handler import database_console, index, health_check, spark_upper
+#from imports.views import import_upload, import_mapping, import_result
+from django.contrib import admin
+from django.urls import path
+
 
 urlpatterns = [
+    path('admin/', admin.site.urls),
     # Pages principales
     path('', index, name='index'),
     path('carte/', carte_view, name='carte'),
     path('db-console/', database_console, name='database_console'),
     path('spark-upper/', spark_upper, name='spark_upper'),
-    
+    #path("admin/import/upload/", import_upload, name="import_upload"),
+    #path("admin/import/mapping/<int:job_id>/", import_mapping, name="import_mapping"),
+   # path("admin/import/result/<int:job_id>/", import_result, name="import_result"),
     # API
     path('health/', health_check, name='health_check'),
     path('api/search', api_search, name='api_search'),

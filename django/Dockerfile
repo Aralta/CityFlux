@@ -5,7 +5,6 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Dépendances système
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         netcat-openbsd \
@@ -23,24 +22,22 @@ RUN apt-get update && \
         git && \
     rm -rf /var/lib/apt/lists/*
 
-# Installation Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Variables Spark
 ENV SPARK_HOME=/usr/local/lib/python3.11/site-packages/pyspark
 ENV PYSPARK_PYTHON=python3.11
 ENV JAVA_HOME=/usr/lib/jvm/default-java
 
-# Copie de l'entrypoint (AVANT le code)
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+# ENTRYPOINT HORS DE /app
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Copie du code Django
-COPY app /app
+# Dossier de code (vide ici, remplacé par volume)
+RUN mkdir -p /app
 
 EXPOSE 8000
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

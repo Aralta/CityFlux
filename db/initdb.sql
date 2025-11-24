@@ -54,6 +54,14 @@ CREATE TABLE zone (
     type TEXT
 );
 
+CREATE TABLE api_registry (
+    id SERIAL PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    url TEXT NOT NULL,
+    description TEXT
+);
+
+
 -- Indexes spatiaux (important pour les perfs)
 CREATE INDEX idx_arret_position ON arret USING GIST(position);
 CREATE INDEX idx_poi_position ON poi USING GIST(position);

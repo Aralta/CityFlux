@@ -1,0 +1,45 @@
+<h2>Liste des APIs configurées</h2>
+
+<table>
+    <tr>
+        <th>Nom</th>
+        <th>URL</th>
+        <th>Description</th>
+        <th>Actions</th>
+    </tr>
+
+    {% for api in apis %}
+    <tr>
+        <form method="POST">
+            {% csrf_token %}
+            <td><input type="text" name="name" value="{{ api.name }}"></td>
+            <td><input type="text" name="url" value="{{ api.url }}"></td>
+            <td><input type="text" name="description" value="{{ api.description }}"></td>
+
+            <input type="hidden" name="id" value="{{ api.id }}">
+
+            <td>
+                <button name="action" value="update">Modifier</button>
+                <button name="action" value="delete">Supprimer</button>
+            </td>
+        </form>
+    </tr>
+    {% endfor %}
+</table>
+
+
+<h2>Ajouter une API</h2>
+
+<form method="POST">
+    {% csrf_token %}
+    <label>Nom :</label>
+    <input type="text" name="name" required>
+
+    <label>URL :</label>
+    <input type="text" name="url" required>
+
+    <label>Description :</label>
+    <input type="text" name="description">
+
+    <button name="action" value="add">Ajouter</button>
+</form>
