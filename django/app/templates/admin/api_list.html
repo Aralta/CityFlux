@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion des APIs - CityFlux Admin</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8f9fa; color: #333; }
+        .container { max-width: 1000px; margin: 40px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #1a5fb4; margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; margin: 25px 0; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #1a5fb4; color: white; }
+        tr:hover { background-color: #f1f3f5; }
+        a { color: #1a5fb4; text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+        .actions a { margin-right: 15px; }
+        .btn { display: inline-block; padding: 10px 20px; background: #1a5fb4; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; }
+        .btn:hover { background: #0d47a1; }
+        .form-add { margin-top: 40px; padding: 20px; background: #f0f7ff; border-radius: 8px; }
+        input[type=text] { padding: 10px; width: 300px; margin-right: 10px; border: 1px solid #ccc; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>APIs configurées</h1>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Nom</th>
+                <th>URL</th>
+                <th>Description</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for api in apis %}
+            <tr>
+                <td><strong>{{ api.name }}</strong></td>
+                <td><small>{{ api.url|truncatechars:60 }}</small></td>
+                <td>{{ api.description|default:"—" }}</td>
+                <td class="actions">
+                    <a href="/api/admin/{{ api.id }}/mapping/" title="Configurer le mapping des champs">Mapper</a>
+                    <a href="/api/admin/delete/{{ api.id }}/" onclick="return confirm('Supprimer cette API ?');" style="color:#d32f2f;">Supprimer</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" style="text-align:center; color:#888; padding:30px;">
+                    Aucune API configurée pour le moment
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="form-add">
+        <h2>Ajouter une nouvelle API</h2>
+        <form method="POST" action="/api/admin/add/">
+            {% csrf_token %}
+            <input type="text" name="name" placeholder="Nom de l'API (ex: Transport Marseille)" required>
+            <input type="text" name="url" placeholder="URL de l'API (ex: https://api.example.com/stops)" required>
+            <button type="submit" class="btn">Ajouter l'API</button>
+        </form>
+    </div>
+
+    <div style="margin-top: 40px; text-align: center;">
+        <a href="/admin/" style="color:#666;">Retour à l'administration</a>
+    </div>
+</div>
+
+</body>
+</html>

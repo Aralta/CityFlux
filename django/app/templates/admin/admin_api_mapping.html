@@ -1,0 +1,88 @@
+{% load mapping_extras %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapping API → {{ api.name }}</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f5f7fa; color: #2d3748; margin: 0; padding: 20px; }
+        .container { max-width: 1100px; margin: 40px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        h1 { color: #1a5fb4; text-align: center; margin-bottom: 10px; }
+        .api-info { background: #e6f0ff; padding: 15px; border-radius: 8px; margin-bottom: 30px; font-size: 1.1em; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th { background: #1a5fb4; color: white; padding: 15px; text-align: left; }
+        td { padding: 12px 15px; border-bottom: 1px solid #e2e8f0; }
+        select { width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 1em; }
+        select:focus { outline: none; border-color: #1a5fb4; }
+        .btn { padding: 12px 25px; margin: 10px 5px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .btn-save { background: #1a5fb4; color: white; }
+        .btn-import { background: #27ae60; color: white; }
+        .btn-back { background: #718096; color: white; }
+        .danger-zone { margin-top: 50px; padding: 20px; background: #fff5f5; border: 2px solid #fc8181; border-radius: 10px; }
+        .danger-zone button { background: #e53e3e; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Configuration du mapping : {{ api.name }}</h1>
+    
+    <div class="api-info">
+        <strong>URL de l'API :</strong> <code>{{ api.url }}</code>
+    </div>
+
+    <form method="POST">
+        {% csrf_token %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Champ dans l'API</th>
+                    <th>→ Correspond à la colonne en BDD</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for field in fields %}
+                <tr>
+                    <td><strong>{{ field }}</strong></td>
+                    <td>
+                        <select name="{{ field }}">
+                            <option value="">-- Ignorer ce champ --</option>
+                            {% for db_field in db_fields %}
+                                {% with current=current_mappings|get_item:field %}
+                                <option value="{{ db_field }}" {% if current == db_field %}selected{% endif %}>
+                                    {{ db_field }}
+                                </option>
+                                {% endwith %}
+                            {% endfor %}
+                        </select>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div style="text-align: center; margin: 40px 0;">
+            <button type="submit" class="btn btn-save">Enregistrer le mapping</button>
+            <button type="submit" name="import_now" value="1" class="btn btn-import">
+                Enregistrer + Importer les données maintenant
+            </button>
+            <a href="/admin/api/" class="btn btn-back">Retour à la liste</a>
+        </div>
+    </form>
+
+    <!-- Zone de danger -->
+    <div class="danger-zone">
+        <h3>Suppression des données importées via cette API</h3>
+        <p>Cette action est irréversible.</p>
+        <form method="POST" style="display: inline;">
+            {% csrf_token %}
+            <button type="submit" name="delete_data" value="1" class="btn"
+                    onclick="return confirm('Êtes-vous SÛRE de vouloir supprimer TOUTES les données importées via {{ api.name }} ?\n\nCette action est irréversible.');">
+                Supprimer toutes les données de cette source
+            </button>
+        </form>
+    </div>
+</div>
+</body>
+</html>

@@ -76,22 +76,32 @@ django.setup()
 
 from views.carte import carte_view, api_search, api_layers_list, api_layer_data, api_layer_config
 from views.handler import database_console, index, health_check, spark_upper
-#from imports.views import import_upload, import_mapping, import_result
 from django.contrib import admin
 from django.urls import path
 
+from views.admin import (
+    admin_dashboard,
+    admin_api_list,
+    admin_api_add,
+    admin_api_delete,
+    admin_api_mapping
+)
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+path('admin/', admin_dashboard, name='admin_dashboard'),        # ← page d'accueil admin
+    
+    path('api/admin/', admin_api_list, name='admin_api_list'),
+    path('api/admin/add/', admin_api_add, name='admin_api_add'),
+    path('api/admin/delete/<int:api_id>/', admin_api_delete),
+    path('api/admin/<int:api_id>/mapping/', admin_api_mapping, name='admin_api_mapping'),
+    
     # Pages principales
     path('', index, name='index'),
     path('carte/', carte_view, name='carte'),
     path('db-console/', database_console, name='database_console'),
     path('spark-upper/', spark_upper, name='spark_upper'),
-    #path("admin/import/upload/", import_upload, name="import_upload"),
-    #path("admin/import/mapping/<int:job_id>/", import_mapping, name="import_mapping"),
-   # path("admin/import/result/<int:job_id>/", import_result, name="import_result"),
-    # API
+   
+   # API
     path('health/', health_check, name='health_check'),
     path('api/search', api_search, name='api_search'),
     path('api/layers/', api_layers_list, name='api_layers_list'),

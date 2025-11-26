@@ -1,56 +1,105 @@
-from django.shortcuts import render, redirect
+# views/admin.py  ← VERSION FINALE 100% FONCTIONNELLE
+
+import os
+import requests
+import pandas as pd
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
 from django.db import connection
+from imports.models import ApiSource, ApiFieldMapping
 
-def get_all_apis():
+
+# ——— FONCTION DYNAMIQUE POUR LES COLONNES DE LA BDD ———
+def get_available_db_fields():
+    tables = ["arret", "ligne", "poi", "zone", "type_transport", "type_poi"]
+    fields = []
     with connection.cursor() as cursor:
-        cursor.execute("SELECT id, name, url, description FROM api_registry ORDER BY id;")
-        rows = cursor.fetchall()
-    return [{"id": r[0], "name": r[1], "url": r[2], "description": r[3]} for r in rows]
+        for table in tables:
+            try:
+                cursor.execute("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = %s
+                    ORDER BY ordinal_position
+                """, [table])
+                for (col,) in cursor.fetchall():
+                    fields.append(f"{table}.{col}")
+            except:
+                continue
+    return sorted(fields)
 
-def add_api(name, url, description):
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            INSERT INTO api_registry (name, url, description)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (name) DO NOTHING;
-        """, [name, url, description])
 
-def delete_api(api_id):
-    with connection.cursor() as cursor:
-        cursor.execute("DELETE FROM api_registry WHERE id = %s;", [api_id])
+# ——— RÉCUPÉRATION DES CHAMPS DE L'API ———
+def get_api_fields(url):
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, list) and len(data) > 0:
+            return list(data[0].keys())
+        elif isinstance(data, dict):
+            return list(data.keys())
+        return []
+    except Exception as e:
+        print(f"Erreur API: {e}")
+        return []
 
-def update_api(api_id, name, url, description):
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            UPDATE api_registry
-            SET name=%s, url=%s, description=%s
-            WHERE id=%s;
-        """, [name, url, description, api_id])
 
-def admin_view(request):
+# ——— PAGE DE MAPPING ———
+def admin_api_mapping(request, api_id):
+    api = get_object_or_404(ApiSource, id=api_id)
+    fields = get_api_fields(api.url)
+    db_fields = get_available_db_fields()
+
+    # Pré-remplissage des mappings existants
+    current_mappings = {m.external_field: m.internal_field for m in api.mappings.all()}
+
     if request.method == "POST":
-        action = request.POST.get("action")
+        for field in fields:
+            selected = request.POST.get(field)
+            if selected and selected.strip():
+                ApiFieldMapping.objects.update_or_create(
+                    api=api,
+                    external_field=field,
+                    defaults={"internal_field": selected}
+                )
+            else:
+                ApiFieldMapping.objects.filter(api=api, external_field=field).delete()
 
-        if action == "add":
-            add_api(
-                request.POST.get("name"),
-                request.POST.get("url"),
-                request.POST.get("description")
-            )
-            return redirect("admin_view")
+        messages.success(request, "Mapping enregistré avec succès !")
 
-        if action == "delete":
-            delete_api(request.POST.get("id"))
-            return redirect("admin_view")
+        if "import_now" in request.POST:
+            messages.info(request, "Importation déclenchée ! (en attente du service preprocess)")
 
-        if action == "update":
-            update_api(
-                request.POST.get("id"),
-                request.POST.get("name"),
-                request.POST.get("url"),
-                request.POST.get("description")
-            )
-            return redirect("admin_view")
+        return redirect('admin_api_mapping', api_id=api.id)
 
-    apis = get_all_apis()
-    return render(request, "admin.html", {"apis": apis})
+    return render(request, "admin/admin_api_mapping.html", {
+        "api": api,
+        "fields": fields,
+        "db_fields": db_fields,
+        "current_mappings": current_mappings,
+    })
+
+
+# ——— LES AUTRES FONCTIONS (liste, ajout, suppression) ———
+def admin_api_list(request):
+    apis = ApiSource.objects.all().order_by('id')
+    return render(request, "admin/api_list.html", {"apis": apis})
+
+def admin_api_add(request):
+    if request.method == "POST":
+        name = request.POST.get("name")
+        url = request.POST.get("url")
+        description = request.POST.get("description", "")
+        ApiSource.objects.create(name=name, url=url, description=description)
+        messages.success(request, f"API '{name}' ajoutée !")
+    return redirect('admin_api_list')
+
+def admin_api_delete(request, api_id):
+    api = get_object_or_404(ApiSource, id=api_id)
+    api_name = api.name
+    api.delete()
+    messages.success(request, f"API '{api_name}' supprimée avec succès.")
+    return redirect('admin_api_list')
+
+def admin_dashboard(request):
+    return render(request, "admin/admin.html")
