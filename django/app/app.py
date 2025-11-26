@@ -55,7 +55,9 @@ if not settings.configured:
 django.setup()
 
 from views.carte import carte_view, api_search, api_layers_list, api_layer_data, api_layer_config
-from views.handler import database_console, index, health_check, spark_upper
+from views.handler import database_console, index, health_check, spark_upper , render_enhanced_data
+from views.get_enhanced_data import GetEnchancedData
+
 
 urlpatterns = [
     # Pages principales
@@ -63,6 +65,7 @@ urlpatterns = [
     path('carte/', carte_view, name='carte'),
     path('db-console/', database_console, name='database_console'),
     path('spark-upper/', spark_upper, name='spark_upper'),
+    path('enhanced-data/', render_enhanced_data, name='enhanced_data'),
     
     # API
     path('health/', health_check, name='health_check'),
@@ -70,6 +73,7 @@ urlpatterns = [
     path('api/layers/', api_layers_list, name='api_layers_list'),
     path('api/layers/<str:layer_id>/data/', api_layer_data, name='api_layer_data'),
     path('api/layers/<str:layer_id>/config/', api_layer_config, name='api_layer_config'),
+    path('api/enhanced-data/', GetEnchancedData, name='api_enhanced_data')
 ]
 
 if __name__ == '__main__':
