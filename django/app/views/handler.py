@@ -15,22 +15,7 @@ def index(request):
 
 def health_check(request):
     """Endpoint de santé"""
-    try:
-        # Tester la connexion à la base de données
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1")
-            cursor.fetchone()
-        
-        return JsonResponse({
-            'status': 'ok',
-            'database': 'connected'
-        })
-    except Exception as e:
-        return JsonResponse({
-            'status': 'error',
-            'database': 'disconnected',
-            'error': str(e)
-        }, status=500)
+    return JsonResponse({'status': 'ok'})
 
 
 @csrf_protect
@@ -139,3 +124,8 @@ def spark_upper(request):
                 context['error'] = f"Erreur lors de l'exécution du job Spark:\n{type(e).__name__}: {str(e)}"
     
     return render(request, 'spark_upper.html', context)
+
+
+def render_enhanced_data(request):
+    """Rendu de la page des données enrichies"""
+    return render(request, 'enhanced_data.html')

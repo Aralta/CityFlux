@@ -421,15 +421,6 @@ def api_layer_config(request, layer_id):
                     'type': 'select',
                     'options': ['Plan', 'Sombre', 'Satellite', 'Topographique'],
                     'value': 'Plan'
-                },
-                {
-                    'name': 'opacity',
-                    'label': 'Opacité',
-                    'type': 'range',
-                    'min': 0,
-                    'max': 1,
-                    'step': 0.1,
-                    'value': 1.0
                 }
             ],
             'filters': [],
