@@ -1,0 +1,621 @@
+/**
+ * Styles pour la page de carte interactive
+ * MobiFlux - Interface de cartographie avec OpenStreetMap
+ */
+
+/* === Variables CSS === */
+:root {
+    --primary-color: #1a73e8;
+    --primary-dark: #1557b0;
+    --sidebar-bg: #1f2937;
+    --sidebar-header-bg: #111827;
+    --hover-color: #2563eb;
+    --success-color: #10b981;
+    --error-color: #ef4444;
+    --border-color: #e5e7eb;
+    --text-light: #e5e7eb;
+    --text-dark: #1f2937;
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* === Reset et base === */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    overflow: hidden;
+}
+
+/* === Container principal === */
+.app-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* === Sidebar === */
+.sidebar {
+    width: 380px;
+    background-color: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.sidebar-header {
+    background-color: var(--sidebar-header-bg);
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.logo {
+    color: white;
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.subtitle {
+    color: var(--text-light);
+    font-size: 14px;
+    margin-top: 4px;
+    opacity: 0.8;
+}
+
+/* === Section de recherche === */
+.search-section {
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.search-box {
+    display: flex;
+    gap: 8px;
+}
+
+#searchInput {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+#searchInput::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+#searchInput:focus {
+    outline: none;
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: var(--primary-color);
+}
+
+#searchButton {
+    padding: 10px 16px;
+    background-color: var(--primary-color);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#searchButton:hover {
+    background-color: var(--primary-dark);
+}
+
+.search-results {
+    margin-top: 12px;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.1);
+    font-size: 14px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.search-results.hidden {
+    display: none;
+}
+
+.search-results .success {
+    color: var(--success-color);
+    padding: 10px;
+}
+
+.search-results .error {
+    color: var(--error-color);
+    padding: 10px;
+}
+
+.search-results .loading {
+    color: var(--text-light);
+    opacity: 0.8;
+    padding: 10px;
+}
+
+/* === Suggestions de recherche === */
+.suggestion-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.suggestion-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.suggestion-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.suggestion-name {
+    color: var(--text-light);
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.suggestion-type {
+    color: var(--text-light);
+    font-size: 12px;
+    opacity: 0.7;
+    margin-top: 2px;
+}
+
+
+/* === Section des couches === */
+.layers-section {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+}
+
+.section-title {
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.layers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.layer-item {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 14px 16px;
+    transition: background-color 0.2s;
+}
+
+.layer-item:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.layer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.layer-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    cursor: pointer;
+    user-select: none;
+}
+
+.layer-icon {
+    font-size: 20px;
+}
+
+.layer-name {
+    color: white;
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.layer-description {
+    color: var(--text-light);
+    font-size: 13px;
+    margin-top: 8px;
+    opacity: 0.7;
+    line-height: 1.4;
+}
+
+/* === Toggle Switch === */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.2);
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+    background-color: var(--primary-color);
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(24px);
+}
+
+/* === Menu détaillé === */
+.detail-menu {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 380px;
+    height: 100%;
+    background-color: var(--sidebar-bg);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s ease;
+    z-index: 1001;
+}
+
+.detail-menu.hidden {
+    transform: translateX(-100%);
+}
+
+.detail-header {
+    background-color: var(--sidebar-header-bg);
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#detailTitle {
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.close-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.detail-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+}
+
+.detail-section {
+    margin-bottom: 28px;
+}
+
+.detail-section h4 {
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* === Paramètres === */
+.parameter-item {
+    margin-bottom: 18px;
+}
+
+.parameter-label {
+    display: block;
+    color: var(--text-light);
+    font-size: 13px;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.parameter-control {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.parameter-control:focus {
+    outline: none;
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: var(--primary-color);
+}
+
+.parameter-control[type="checkbox"] {
+    width: auto;
+    margin-right: 8px;
+}
+
+.parameter-control[type="color"] {
+    height: 40px;
+    padding: 4px;
+    cursor: pointer;
+}
+
+.range-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.range-control input[type="range"] {
+    flex: 1;
+}
+
+.range-value {
+    color: var(--text-light);
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 40px;
+    text-align: right;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    color: var(--text-light);
+    font-size: 13px;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+
+/* === Info Grid === */
+.info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.info-item {
+    color: var(--text-light);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.info-item strong {
+    color: white;
+}
+
+/* === Conteneur de la carte === */
+.map-container {
+    flex: 1;
+    position: relative;
+}
+
+#map {
+    width: 100%;
+    height: 100%;
+}
+
+/* === Contrôles de la carte === */
+.map-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 500;
+}
+
+.control-button {
+    width: 40px;
+    height: 40px;
+    background-color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.control-button:hover {
+    background-color: #f3f4f6;
+    box-shadow: var(--shadow-lg);
+}
+
+/* === Légende === */
+.legend {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background-color: white;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    max-width: 250px;
+    z-index: 500;
+}
+
+.legend.hidden {
+    display: none;
+}
+
+.legend h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: var(--text-dark);
+}
+
+#legendContent {
+    font-size: 12px;
+    color: var(--text-dark);
+}
+
+/* === Popup personnalisée === */
+.popup-content {
+    font-size: 13px;
+}
+
+.popup-content h4 {
+    margin: 0 0 8px 0;
+    color: var(--primary-color);
+    font-size: 15px;
+}
+
+.popup-content p {
+    margin: 4px 0;
+    line-height: 1.4;
+}
+
+/* === États de chargement et d'erreur === */
+.loading,
+.error {
+    padding: 12px;
+    text-align: center;
+    border-radius: 6px;
+}
+
+.loading {
+    color: var(--text-light);
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.error {
+    color: var(--error-color);
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* === Scrollbar personnalisée === */
+.layers-section::-webkit-scrollbar,
+.detail-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.layers-section::-webkit-scrollbar-track,
+.detail-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.layers-section::-webkit-scrollbar-thumb,
+.detail-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.layers-section::-webkit-scrollbar-thumb:hover,
+.detail-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* === Responsive === */
+@media (max-width: 1024px) {
+    .sidebar {
+        width: 320px;
+    }
+    
+    .detail-menu {
+        width: 320px;
+    }
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        max-width: 320px;
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100vh;
+        transform: translateX(-100%);
+        transition: transform 0.3s;
+    }
+    
+    .sidebar.open {
+        transform: translateX(0);
+    }
+}

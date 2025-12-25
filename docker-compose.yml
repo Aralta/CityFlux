@@ -1,0 +1,205 @@
+services:
+  db:
+    build:
+      context: ./db
+      dockerfile: Dockerfile
+    container_name: postgres_postgis
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    command:
+      - "postgres"
+      - "-c"
+      - "log_statement=all"
+      - "-c"
+      - "log_destination=stderr"
+      - "-c"
+      - "logging_collector=off"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+    networks:
+       - mobility-network
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+
+  spark-master:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
+      - SPARK_NO_RSYNC=true
+    entrypoint: ['./entrypoint.sh', 'master']
+    ports:
+      - '8080:8080'
+      - '7077:7077'
+    volumes:
+      - ./data:/opt/spark/data
+      - ./apps:/opt/spark/apps
+      - spark-logs:/opt/spark/spark-events
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - mobility-network
+
+  spark-worker:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=6
+      - SPARK_WORKER_MEMORY=6g
+      - SPARK_NO_RSYNC=true
+    entrypoint: ['./entrypoint.sh', 'worker']
+    volumes:
+      - ./data:/opt/spark/data
+      - ./apps:/opt/spark/apps
+      - spark-logs:/opt/spark/spark-events
+    env_file:
+      - .env
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    deploy:
+      replicas: 6
+    networks:
+      - mobility-network
+
+  spark-history:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    container_name: spark-history
+    environment:
+      - SPARK_NO_RSYNC=true
+    entrypoint: ['./entrypoint.sh', 'history']
+    ports:
+      - '18080:18080'
+    volumes:
+      - spark-logs:/opt/spark/spark-events
+    env_file:
+      - .env
+    depends_on:
+      - spark-master
+    networks:
+      - mobility-network
+
+  spark-job-listener:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    container_name: spark-job-listener
+    environment:
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SPARK_NO_RSYNC=true
+    entrypoint: ['python3', '/opt/spark/apps/spark_job_listener.py']
+    volumes:
+      - ./data:/opt/spark/data
+      - ./spark/app:/opt/spark/apps
+      - spark-logs:/opt/spark/spark-events
+    env_file:
+      - .env
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - mobility-network
+
+  web:
+    build:
+      context: ./django
+      dockerfile: Dockerfile
+    container_name: django-server
+    entrypoint: ["/app/entrypoint.sh"]
+    command: python app.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      spark-master:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - mobility-network
+
+  celery-worker:
+    build:
+      context: ./django
+      dockerfile: Dockerfile
+    container_name: celery-worker
+    entrypoint: ["/app/entrypoint.sh"]
+    command: celery -A app worker --loglevel=info
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks:
+      - mobility-network
+
+
+  redis:
+    image: "redis:latest"
+    container_name: redis-server
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - mobility-network
+
+volumes:
+  postgres_data:
+  spark-logs:
+
+networks:
+  mobility-network:
+    driver: bridge

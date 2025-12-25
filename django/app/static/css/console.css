@@ -1,0 +1,121 @@
+/**
+ * Styles pour les pages de console (DB et Spark)
+ */
+
+.console-content {
+    background-color: var(--bg-white);
+    padding: 40px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    color: var(--text-dark);
+    font-weight: 500;
+    margin-bottom: 10px;
+}
+
+.form-group textarea,
+.form-group input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    transition: border-color 0.2s;
+}
+
+.form-group textarea {
+    min-height: 150px;
+    resize: vertical;
+}
+
+.form-group textarea:focus,
+.form-group input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.info-box {
+    background-color: #e7f3ff;
+    border-left: 4px solid var(--info-color);
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: var(--radius);
+}
+
+.result-box {
+    margin-top: 30px;
+    padding: 20px;
+    border-radius: var(--radius);
+    border-left: 4px solid;
+}
+
+.result-box strong {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.result-box pre {
+    background-color: rgba(0, 0, 0, 0.03);
+    padding: 15px;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.result-box.success {
+    background-color: #d1fae5;
+    border-left-color: var(--success-color);
+}
+
+.result-box.error {
+    background-color: #fee2e2;
+    border-left-color: var(--error-color);
+}
+
+.result-box.loading {
+    background-color: #dbeafe;
+    border-left-color: var(--info-color);
+}
+
+.spark-result {
+    margin: 15px 0;
+}
+
+.spark-result p {
+    margin: 8px 0;
+    font-size: 0.95rem;
+}
+
+details {
+    margin-top: 20px;
+}
+
+details summary {
+    cursor: pointer;
+    font-weight: 500;
+    padding: 10px;
+    background-color: rgba(0, 0, 0, 0.03);
+    border-radius: var(--radius);
+    user-select: none;
+}
+
+details summary:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+details[open] summary {
+    margin-bottom: 10px;
+}

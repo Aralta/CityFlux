@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Données Enrichies - MobiFlux</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/static/css/enhanced_data.css">
+</head>
+<body>
+    <div class="page-container">
+        <header class="header">
+            <div class="header-content">
+                <a href="/" class="back-link">← Retour</a>
+                <h1>📊 Extraction de Données Enrichies</h1>
+                <p class="subtitle">Dessinez une zone et sélectionnez les types de données à extraire d'OpenStreetMap</p>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <aside class="control-panel">
+                <div class="panel-section">
+                    <h2>🗺️ Zone d'extraction</h2>
+                    <div class="zone-buttons">
+                        <button id="drawZoneBtn" class="zone-button">
+                            🖊️ Dessiner une zone
+                        </button>
+                        <button id="clearZoneBtn" class="zone-button secondary">
+                            🗑️ Effacer
+                        </button>
+                    </div>
+                    <div id="zoneStatus" class="zone-status">
+                        <div class="zone-undefined">
+                            <strong>⚠️ Aucune zone définie</strong>
+                            <p>Cliquez sur "Dessiner une zone" pour commencer</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h2>🏢 Points d'Intérêt</h2>
+                    <div class="checkbox-grid">
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="school" id="school">
+                            <span>🏫 Écoles</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="station" id="station">
+                            <span>🚉 Gares</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="supermarket" id="supermarket">
+                            <span>🛒 Supermarchés</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="mall" id="mall">
+                            <span>🏬 Centres commerciaux</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="bakery" id="bakery">
+                            <span>🥖 Boulangeries</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="leisure" id="leisure">
+                            <span>🎭 Loisirs</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="restaurant" id="restaurant">
+                            <span>🍽️ Restaurants</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="factory" id="factory">
+                            <span>🏭 Usines</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="hospital" id="hospital">
+                            <span>🏥 Hôpitaux</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="fire_station" id="fire_station">
+                            <span>🚒 Casernes pompiers</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="police_station" id="police_station">
+                            <span>👮 Commissariats</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h2>🗺️ Zones d'Usage</h2>
+                    <div class="checkbox-grid">
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="residential_zone" id="residential_zone">
+                            <span>🏘️ Zones résidentielles</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="commercial_zone" id="commercial_zone">
+                            <span>🏢 Zones commerciales</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="industrial_zone" id="industrial_zone">
+                            <span>🏭 Zones industrielles</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="forest_zone" id="forest_zone">
+                            <span>🌲 Forêts</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="farmland_zone" id="farmland_zone">
+                            <span>🌾 Terres agricoles</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <button id="extractBtn" class="extract-button">
+                        🚀 Extraire les données
+                    </button>
+                    <button id="selectAllBtn" class="secondary-button">
+                        ✅ Tout sélectionner
+                    </button>
+                    <button id="clearAllBtn" class="secondary-button">
+                        ❌ Tout désélectionner
+                    </button>
+                </div>
+
+                <div id="resultsSection" class="panel-section hidden">
+                    <h2>📦 Résultats</h2>
+                    <div id="resultsContent" class="results-content"></div>
+                    <button id="downloadBtn" class="download-button hidden">
+                        💾 Télécharger JSON
+                    </button>
+                    <button id="copyUrlBtn" class="secondary-button hidden">
+                        🔗 Copier l'URL
+                    </button>
+                </div>
+            </aside>
+
+            <main class="map-section">
+                <div id="map"></div>
+                <div class="map-overlay">
+                    <div class="overlay-info">
+                        <strong>ℹ️ Instructions:</strong> Cliquez sur "Dessiner une zone" puis placez des points sur la carte. Fermez le polygone en cliquant sur le premier point.
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/static/js/enhanced_data.js"></script>
+</body>
+</html>

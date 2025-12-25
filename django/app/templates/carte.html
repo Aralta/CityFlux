@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/carte.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Menu Latéral -->
+        <aside class="sidebar">
+            <!-- Logo et Titre -->
+            <div class="sidebar-header">
+                <h1 class="logo">🗺️ MobiFlux</h1>
+                <p class="subtitle">Carte Interactive</p>
+            </div>
+            
+            <!-- Barre de Recherche -->
+            <div class="search-section">
+                <div class="search-box">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="Rechercher un lieu..."
+                        aria-label="Rechercher un lieu"
+                    >
+                    <button id="searchButton" aria-label="Rechercher">
+                        🔍
+                    </button>
+                </div>
+                <div id="searchResults" class="search-results"></div>
+            </div>
+            
+            <!-- Liste des Couches -->
+            <div class="layers-section">
+                <h2 class="section-title">Couches</h2>
+                <div id="layersList" class="layers-list">
+                    <!-- Les couches seront chargées dynamiquement -->
+                    <div class="loading">Chargement des couches...</div>
+                </div>
+            </div>
+            
+            <!-- Menu Détaillé (caché par défaut) -->
+            <div id="detailMenu" class="detail-menu hidden">
+                <div class="detail-header">
+                    <h3 id="detailTitle">Détails de la couche</h3>
+                    <button id="closeDetail" class="close-button" aria-label="Fermer">✕</button>
+                </div>
+                <div id="detailContent" class="detail-content">
+                    <!-- Le contenu sera chargé dynamiquement -->
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Conteneur de la Carte -->
+        <main class="map-container">
+            <div id="map"></div>
+            
+            <!-- Contrôles de la carte -->
+            <div class="map-controls">
+                <button id="resetView" class="control-button" title="Réinitialiser la vue">
+                    🏠
+                </button>
+                <button id="toggleFullscreen" class="control-button" title="Plein écran">
+                    ⛶
+                </button>
+            </div>
+            
+            <!-- Légende (optionnelle) -->
+            <div id="legend" class="legend hidden">
+                <h4>Légende</h4>
+                <div id="legendContent"></div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Leaflet MarkerCluster pour de meilleures performances -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    
+    <!-- Custom JS -->
+    <script>
+        // Configuration initiale passée depuis Django
+        const MAP_CONFIG = {
+            defaultCenter: {{ default_center|safe }},
+            defaultZoom: {{ default_zoom }},
+            apiEndpoints: {
+                search: '/api/search',
+                layers: '/api/layers/',
+                layerData: '/api/layers/{id}/data/',
+                layerConfig: '/api/layers/{id}/config/'
+            }
+        };
+    </script>
+    <script src="/static/js/carte.js"></script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Console Services - MobiFlux</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/multi_console.css">
+</head>
+<body>
+    <div class="multi-console-container">
+        <header class="console-header">
+            <a href="/" class="back-link">← Retour à l'accueil</a>
+            <h1>🖥️ Multi-Console Services</h1>
+            <div class="header-controls">
+                <button id="refreshAll" class="btn-icon" title="Rafraîchir tous (Ctrl+R)">
+                    🔄
+                </button>
+                <button id="pauseAll" class="btn-icon" title="Pause/Resume (Ctrl+Espace)">
+                    ⏸️
+                </button>
+                <button id="clearAll" class="btn-icon" title="Effacer tous">
+                    🗑️
+                </button>
+                <select id="refreshRate" class="layout-select" title="Fréquence de rafraîchissement">
+                    <option value="5000">5s</option>
+                    <option value="15000" selected>15s</option>
+                    <option value="30000">30s</option>
+                    <option value="60000">1min</option>
+                    <option value="0">Manuel</option>
+                </select>
+                <select id="layoutSelect" class="layout-select">
+                    <option value="auto" selected>Auto</option>
+                    <option value="grid-2x2">2x2</option>
+                    <option value="grid-2x3">2x3</option>
+                    <option value="grid-3x3">3x3</option>
+                    <option value="horizontal">H</option>
+                    <option value="vertical">V</option>
+                </select>
+            </div>
+        </header>
+
+        <div class="services-selector">
+            <span class="selector-label">Services:</span>
+            <div class="service-toggles" id="serviceToggles">
+                <!-- Généré dynamiquement -->
+            </div>
+        </div>
+
+        <main class="console-grid" id="consoleGrid">
+            <!-- Les panneaux de console sont générés dynamiquement -->
+        </main>
+    </div>
+
+    <script src="/static/js/multi_console.js"></script>
+</body>
+</html>
