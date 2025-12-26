@@ -1,12 +1,158 @@
+"""
+Module pour récupérer des données enrichies depuis l'API Overpass.
+"""
 import requests
 import json
-import redis
 from django.http import JsonResponse
+
+
+# Configuration des types de données avec leurs tags OSM
+OSM_DATA_CONFIG = {
+    'school': {
+        'tags': [
+            ('amenity', 'school'),
+            ('amenity', 'kindergarten'),
+            ('amenity', 'university'),
+            ('amenity', 'college'),
+            ('amenity', 'library'),
+        ],
+        'elements': ['node', 'way', 'relation']
+    },
+    'station': {
+        'tags': [
+            ('railway', 'station'),
+            ('amenity', 'ferry_terminal'),
+            ('public_transport', 'station', 'station', 'ferry'),
+            ('aeroway', 'aerodrome'),
+        ],
+        'elements': ['node', 'way', 'relation']
+    },
+    'supermarket': {
+        'tags': [('shop', 'supermarket')],
+        'elements': ['node', 'way', 'relation']
+    },
+    'mall': {
+        'tags': [('shop', 'mall')],
+        'elements': ['node', 'way', 'relation']
+    },
+    'bakery': {
+        'tags': [('shop', 'bakery')],
+        'elements': ['node', 'way', 'relation']
+    },
+    'leisure': {
+        'tags': [
+            ('leisure', 'sports_centre'),
+            ('leisure', 'fitness_centre'),
+            ('leisure', 'stadium'),
+            ('amenity', 'cinema'),
+            ('amenity', 'theatre'),
+            ('tourism', 'museum'),
+            ('leisure', 'park'),
+            ('amenity', 'music_venue'),
+        ],
+        'elements': ['node', 'way', 'relation']
+    },
+    'restaurant': {
+        'tags': [('amenity', 'restaurant')],
+        'elements': ['node', 'way', 'relation']
+    },
+    'factory': {
+        'tags': [
+            ('landuse', 'industrial'),
+            ('landuse', 'warehouse'),
+        ],
+        'elements': ['node', 'way', 'relation']
+    },
+    'hospital': {
+        'tags': [
+            ('amenity', 'hospital'),
+            ('amenity', 'clinic'),
+            ('amenity', 'doctors'),
+            ('amenity', 'pharmacy'),
+        ],
+        'elements': ['node', 'way', 'relation']
+    },
+    'fire_station': {
+        'tags': [('amenity', 'fire_station')],
+        'elements': ['node', 'way', 'relation']
+    },
+    'police_station': {
+        'tags': [('amenity', 'police')],
+        'elements': ['node', 'way', 'relation']
+    },
+    'residential_zone': {
+        'tags': [('landuse', 'residential')],
+        'elements': ['way', 'relation']
+    },
+    'commercial_zone': {
+        'tags': [('landuse', 'commercial')],
+        'elements': ['way', 'relation']
+    },
+    'industrial_zone': {
+        'tags': [('landuse', 'industrial')],
+        'elements': ['way', 'relation']
+    },
+    'forest_zone': {
+        'tags': [('landuse', 'forest')],
+        'elements': ['way', 'relation']
+    },
+    'farmland_zone': {
+        'tags': [('landuse', 'farmland')],
+        'elements': ['way', 'relation']
+    },
+}
+
+
+def build_overpass_filter(tag_tuple, poly_coords):
+    """
+    Construit un filtre Overpass à partir d'un tuple de tags.
+    Supporte les tags simples (key, value) et composés (key1, value1, key2, value2).
+    """
+    if len(tag_tuple) == 2:
+        return f'["{tag_tuple[0]}"="{tag_tuple[1]}"](poly:"{poly_coords}")'
+    elif len(tag_tuple) == 4:
+        return f'["{tag_tuple[0]}"="{tag_tuple[1]}"]["{tag_tuple[2]}"="{tag_tuple[3]}"](poly:"{poly_coords}")'
+    return ''
+
+
+def build_query_section(data_type, poly_coords):
+    """
+    Construit une section de requête Overpass pour un type de données.
+    """
+    config = OSM_DATA_CONFIG.get(data_type)
+    if not config:
+        return ''
+    
+    lines = []
+    for tag_tuple in config['tags']:
+        filter_str = build_overpass_filter(tag_tuple, poly_coords)
+        for element in config['elements']:
+            lines.append(f'  {element}{filter_str};')
+    
+    return '\n'.join(lines) + '\n'
+
+
+def extract_polygon_coords(zone):
+    """
+    Extrait et formate les coordonnées d'un polygone GeoJSON pour Overpass.
+    Retourne les coordonnées au format "lat lon lat lon ..." ou None si invalide.
+    """
+    coords = zone.get('coordinates', [[]])[0]
+    if not coords or len(coords) < 3:
+        return None
+    
+    # Format Overpass: lat lon (inversé par rapport à GeoJSON qui est lng lat)
+    # Exclure le dernier point (doublon de fermeture du polygone)
+    return " ".join([f"{coord[1]} {coord[0]}" for coord in coords[:-1]])
 
 
 def GetEnchancedData(request):
     """
-    View to get enhanced data based on request parameters.
+    Vue pour récupérer des données enrichies depuis l'API Overpass.
+    
+    Paramètres GET:
+        zone: GeoJSON du polygone de la zone à analyser (requis)
+        school, station, supermarket, etc.: 'true' pour inclure ce type de données
     """
     zone_json = request.GET.get('zone', None)
     if not zone_json:
@@ -17,387 +163,39 @@ def GetEnchancedData(request):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid zone GeoJSON'}, status=400)
 
-    # Liste des paramètres à inclure avec leurs fonctions
-    includes_config = [
-        ('school', include_schools),
-        ('station', include_stations),
-        ('supermarket', include_supermarkets),
-        ('mall', include_malls),
-        ('bakery', include_bakeries),
-        ('leisure', include_leisure_centers),
-        ('restaurant', include_restaurants),
-        ('factory', include_factories),
-        ('hospital', include_hospitals),
-        ('fire_station', include_fire_stations),
-        ('police_station', include_police_stations),
-        ('residential_zone', include_residential_zones),
-        ('commercial_zone', include_commercial_zones),
-        ('industrial_zone', include_industrial_zones),
-        ('forest_zone', include_forest_zones),
-        ('farmland_zone', include_farmland_zones),
-    ]
-
-    # Extraire les coordonnées du polygone
-    coords = zone.get('coordinates', [[]])[0]
-    if not coords or len(coords) < 3:
+    poly_coords = extract_polygon_coords(zone)
+    if not poly_coords:
         return JsonResponse({'error': 'Invalid polygon coordinates'}, status=400)
     
-    # Formater les coordonnées pour Overpass (lat lon, pas lng lat)
-    poly_coords = " ".join([f"{coord[1]} {coord[0]}" for coord in coords[:-1]])  # Exclure le dernier point (doublon)
+    # Construire la requête Overpass
+    query_parts = ['[out:json][timeout:60];', '(']
     
-    # Construire la requête Overpass de base
-    query = f"""[out:json][timeout:60];
-(
-"""
+    for data_type in OSM_DATA_CONFIG.keys():
+        if request.GET.get(data_type, 'false').lower() == 'true':
+            query_parts.append(build_query_section(data_type, poly_coords))
     
-    # Ajouter les éléments demandés
-    for param_name, func in includes_config:
-        if request.GET.get(param_name, 'false').lower() == 'true':
-            query += func(poly_coords)
+    query_parts.append(');')
+    query_parts.append('out geom;')
     
-    # Finaliser la requête avec out geom pour récupérer la géométrie complète des polygones
-    query += """);
-out geom;"""
-
-    print("🔍 Requête Overpass générée:")
-    print(query[:500] + "..." if len(query) > 500 else query)
-
-    
+    query = '\n'.join(query_parts)
 
     try:
         response = requests.post(
             "https://overpass-api.de/api/interpreter",
             data=query,
-            timeout=60  # Augmenter le timeout
+            timeout=60
         )
         response.raise_for_status()
 
-        #===TODO======================== Lancer une tâche Celery ===========================
-
-        # Lancer la tâche Celery pour traiter les données via Spark
-        from tasks import run_spark_job  # Import local pour éviter l'import circulaire
+        from tasks import run_spark_job
         run_spark_job.delay(response.text, "map_data_process.py")
-        print("🚀 Tâche Celery lancée pour le traitement des données.")
 
-
-
-
-        
-        # Retourner le JSON au client
-        print("✅ Données reçues d'Overpass API.")
-        data = response.json()
-        print(f"📦 Nombre d'éléments reçus: {len(data.get('elements', []))}")
-
-        #===TODO======================== Envoyer les données à celery + Redis ===========================
-        '''
-        Lancer une tâche Celery pour traiter les données
-        task = process_map_data.delay(data)
-        ...
-            1. Client → GET /api/enhanced-data/?zone=...&bakery=true
-            2. Django → Appelle Overpass API
-            3. Django → process_map_data.delay(data) → Redis (queue)
-            4. Django → Retourne immédiatement {task_id, status: "processing"}
-            5. Celery Worker → Récupère la tâche depuis Redis
-            6. Celery Worker → Traite les données (process_point, process_area)
-            7. Celery Worker → Sauvegarde en PostgreSQL
-            8. Celery Worker → Stocke le résultat dans Redis
-        '''
-
-        
         return JsonResponse("Données traitées avec succès", status=200, safe=False)
 
     except requests.exceptions.Timeout:
-        print("❌ Timeout lors de la requête Overpass.")
         return JsonResponse({'error': 'La requête a pris trop de temps (timeout)'}, status=504)
     except requests.exceptions.RequestException as e:
-        print(f"❌ Erreur lors de la requête Overpass: {e}")
         return JsonResponse({'error': f'Overpass API error: {str(e)}'}, status=500)
     except Exception as e:
-        print(f"❌ Erreur générale: {e}")
         return JsonResponse({'error': str(e)}, status=500)
-
-def include_schools(poly_coords):
-    """Include schools data in the Overpass API request."""
-    return f"""
-  // Schools
-  node["amenity"="school"](poly:"{poly_coords}");
-  way["amenity"="school"](poly:"{poly_coords}");
-  relation["amenity"="school"](poly:"{poly_coords}");
-  node["amenity"="kindergarten"](poly:"{poly_coords}");
-  way["amenity"="kindergarten"](poly:"{poly_coords}");
-  relation["amenity"="kindergarten"](poly:"{poly_coords}");
-  node["amenity"="university"](poly:"{poly_coords}");
-  way["amenity"="university"](poly:"{poly_coords}");
-  relation["amenity"="university"](poly:"{poly_coords}");
-  node["amenity"="college"](poly:"{poly_coords}");
-  way["amenity"="college"](poly:"{poly_coords}");
-  relation["amenity"="college"](poly:"{poly_coords}");
-  node["amenity"="library"](poly:"{poly_coords}");
-  way["amenity"="library"](poly:"{poly_coords}");
-  relation["amenity"="library"](poly:"{poly_coords}");
-"""
-
-
-def include_stations(poly_coords):
-    """
-    Include stations data in the Overpass API request
-    """
-    data = f'''
-    node["railway"="station"](poly:"{poly_coords}");
-    way["railway"="station"](poly:"{poly_coords}");
-    relation["railway"="station"](poly:"{poly_coords}");
-
-    node["amenity"="ferry_terminal"](poly:"{poly_coords}");
-    way["amenity"="ferry_terminal"](poly:"{poly_coords}");
-    relation["amenity"="ferry_terminal"](poly:"{poly_coords}");
-
-    node["public_transport"="station"]["station"="ferry"](poly:"{poly_coords}");
-    way["public_transport"="station"]["station"="ferry"](poly:"{poly_coords}");
-    relation["public_transport"="station"]["station"="ferry"](poly:"{poly_coords}");
-
-    node["aeroway"="aerodrome"](poly:"{poly_coords}");
-    way["aeroway"="aerodrome"](poly:"{poly_coords}");
-    relation["aeroway"="aerodrome"](poly:"{poly_coords}");
-
-    '''
-    return data
-
-def include_supermarkets(poly_coords):
-    """
-    Include supermarkets data in the Overpass API request
-    """
-    data = f'''
-    node["shop"="supermarket"](poly:"{poly_coords}");
-    way["shop"="supermarket"](poly:"{poly_coords}");
-    relation["shop"="supermarket"](poly:"{poly_coords}");
-    '''
-    return data
-
-def include_malls(poly_coords):
-    """
-    Include malls data in the Overpass API request
-    """
-    data = f'''
-    node["shop"="mall"](poly:"{poly_coords}");
-    way["shop"="mall"](poly:"{poly_coords}");
-    relation["shop"="mall"](poly:"{poly_coords}");
-    '''
-    return data
-
-def include_bakeries(poly_coords):
-    """
-    Include bakeries data in the Overpass API request
-    """
-
-    data = f'''
-    node["shop"="bakery"](poly:"{poly_coords}");
-    way["shop"="bakery"](poly:"{poly_coords}");
-    relation["shop"="bakery"](poly:"{poly_coords}");
-    '''
-    return data
-
-def include_leisure_centers(poly_coords):
-    """
-    Include leisure centers data in the Overpass API request
-    """
-    data = f'''
-    node["leisure"="sports_centre"](poly:"{poly_coords}");
-    way["leisure"="sports_centre"](poly:"{poly_coords}");
-    relation["leisure"="sports_centre"](poly:"{poly_coords}");
-
-    node["leisure"="fitness_centre"](poly:"{poly_coords}");
-    way["leisure"="fitness_centre"](poly:"{poly_coords}");
-    relation["leisure"="fitness_centre"](poly:"{poly_coords}");
-
-    node["leisure"="stadium"](poly:"{poly_coords}");
-    way["leisure"="stadium"](poly:"{poly_coords}");
-    relation["leisure"="stadium"](poly:"{poly_coords}");
-
-    node["amenity"="cinema"](poly:"{poly_coords}");
-    way["amenity"="cinema"](poly:"{poly_coords}");
-    relation["amenity"="cinema"](poly:"{poly_coords}");
-
-    node["amenity"="theatre"](poly:"{poly_coords}");
-    way["amenity"="theatre"](poly:"{poly_coords}");
-    relation["amenity"="theatre"](poly:"{poly_coords}");
-
-    node["tourism"="museum"](poly:"{poly_coords}");
-    way["tourism"="museum"](poly:"{poly_coords}");
-    relation["tourism"="museum"](poly:"{poly_coords}");
-
-    node["leisure"="park"](poly:"{poly_coords}");
-    way["leisure"="park"](poly:"{poly_coords}");
-    relation["leisure"="park"](poly:"{poly_coords}");
-
-    node["amenity"="music_venue"](poly:"{poly_coords}");
-    way["amenity"="music_venue"](poly:"{poly_coords}");
-    relation["amenity"="music_venue"](poly:"{poly_coords}");
-
-    '''
-    return data
-
-def include_restaurants(poly_coords):
-    """
-    Include restaurants data in the Overpass API request
-    """
-    data = f'''
-    node["amenity"="restaurant"](poly:"{poly_coords}");
-    way["amenity"="restaurant"](poly:"{poly_coords}");
-    relation["amenity"="restaurant"](poly:"{poly_coords}");
-    '''
-    return data
-
-def include_factories(poly_coords):
-    """
-    Include factories data in the Overpass API request
-    """
-    data = f'''
-    node["landuse"="industrial"](poly:"{poly_coords}");
-    way["landuse"="industrial"](poly:"{poly_coords}");
-    relation["landuse"="industrial"](poly:"{poly_coords}");
-
-    node["landuse"="warehouse"](poly:"{poly_coords}");
-    way["landuse"="warehouse"](poly:"{poly_coords}");
-    relation["landuse"="warehouse"](poly:"{poly_coords}");
-    '''
-    return data
-
-def include_hospitals(poly_coords):
-    """
-    Include hospitals data in the Overpass API request
-    """
-    data = f'''
-    node["amenity"="hospital"](poly:"{poly_coords}");
-    way["amenity"="hospital"](poly:"{poly_coords}");
-    relation["amenity"="hospital"](poly:"{poly_coords}");
-
-    node["amenity"="clinic"](poly:"{poly_coords}");
-    way["amenity"="clinic"](poly:"{poly_coords}");
-    relation["amenity"="clinic"](poly:"{poly_coords}");
-    
-    node["amenity"="doctors"](poly:"{poly_coords}");
-    way["amenity"="doctors"](poly:"{poly_coords}");
-    relation["amenity"="doctors"](poly:"{poly_coords}");
-
-    node["amenity"="pharmacy"](poly:"{poly_coords}");
-    way["amenity"="pharmacy"](poly:"{poly_coords}");
-    relation["amenity"="pharmacy"](poly:"{poly_coords}");
-    '''
-    return data
-    
-def include_fire_stations(poly_coords):
-    """
-    Include fire stations data in the Overpass API request
-    """
-    data = f'''
-    node["amenity"="fire_station"](poly:"{poly_coords}");
-    way["amenity"="fire_station"](poly:"{poly_coords}");
-    relation["amenity"="fire_station"](poly:"{poly_coords}");
-    '''
-    return data
-
-def include_police_stations(poly_coords):
-    """
-    Include police stations data in the Overpass API request
-    """
-    data = f'''
-    node["amenity"="police"](poly:"{poly_coords}");
-    way["amenity"="police"](poly:"{poly_coords}");
-    relation["amenity"="police"](poly:"{poly_coords}");
-    '''
-    return data
-
-def include_residential_zones(poly_coords):
-    """
-    Include residential zones data in the Overpass API request
-    """
-    data = f'''
-    way["landuse"="residential"](poly:"{poly_coords}");
-    relation["landuse"="residential"](poly:"{poly_coords}");
-    '''
-    return data
-
-def include_commercial_zones(poly_coords):
-    """
-    Include commercial zones data in the Overpass API request
-    """
-    data = f'''
-    way["landuse"="commercial"](poly:"{poly_coords}");
-    relation["landuse"="commercial"](poly:"{poly_coords}");
-    '''
-    return data
-
-def include_industrial_zones(poly_coords):
-    """
-    Include industrial zones data in the Overpass API request
-    """
-    data = f'''
-    way["landuse"="industrial"](poly:"{poly_coords}");
-    relation["landuse"="industrial"](poly:"{poly_coords}");
-    '''
-    return data
-
-def include_forest_zones(poly_coords):
-    """
-    Include forest zones data in the Overpass API request
-    """
-    data = f'''
-    way["landuse"="forest"](poly:"{poly_coords}");
-    relation["landuse"="forest"](poly:"{poly_coords}");
-    '''
-    return data
-
-def include_farmland_zones(poly_coords):
-    """
-    Include farmland zones data in the Overpass API request
-    """
-    data = f'''
-    way["landuse"="farmland"](poly:"{poly_coords}");
-    relation["landuse"="farmland"](poly:"{poly_coords}");
-    '''
-    return data
-
-tag = {
-    "tag" : ["type", "tag"],
-    "aerodrome": ["transport", "aerodrome"],
-    "station": ["transport", "station de chemin de fer"],
-    "ferry_terminal": ["transport", "terminal de ferry"],
-
-    "school": ["school", "ecole primaire"],
-    "university": ["ecole", "ecole superieure"],
-    "kindergarten": ["ecole", "maternelle"],
-    "college": ["ecole", "college"],
-    "library": ["ecole", "bibliotheque"],
-
-    "supermarket": ["commerce", "supermarche"],
-    "bakery": ["boulangerie", ""],
-    "mall": ["commerce", "centre commercial"],
-
-    "sports_centre": ["loisir", "centre sportif"],
-    "stadium": ["loisir", "stade"],
-    "fitness_centre": ["loisir", "salle de sport"],
-    "theatre": ["loisir", "theatre"],
-    "museum": ["loisir", "musee"],
-    "park": ["loisir", "parc"],
-    "music_venue": ["loisir", "salle de concert"],
-
-    "restaurant": ["restauration", "restaurant"],
-    "cafe": ["restauration", "cafe"],
-    
-    "industrial": ["industrie", ""],
-
-    "hospital": ["sante", "hopital"],
-    "clinic": ["sante", "clinique"],
-    "doctor": ["sante", "cabinet medical"],
-
-    "fire_station": ["urgence", "caserne de pompiers"],
-
-    "police": ["urgence", "poste de police"],
-
-    "forest": ["zone", "foret"],
-    "farmland": ["zone", "terre agricole"]
-}
-
-zone = ["forest", "farmland","industrial"]
-
 

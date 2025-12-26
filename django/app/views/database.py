@@ -1,22 +1,32 @@
 """
-Gestionnaire de base de données PostGIS pour la carte interactive
+Gestionnaire de base de données PostGIS pour la carte interactive.
 """
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import json
 from typing import Dict, List, Optional, Tuple
 import os
 
 
+# Configuration de simplification géométrique selon le zoom
+ZOOM_TOLERANCE = {
+    'low': (8, 0.01),      # zoom <= 8
+    'medium': (12, 0.001), # zoom <= 12
+    'high': (15, 0.0001),  # zoom <= 15
+    'full': (20, 0)        # zoom > 15
+}
+
+# Configuration des limites adaptatives selon le zoom
+ZOOM_LIMITS = {
+    10: 100,
+    14: 500,
+    20: 1000
+}
+
+
 class DatabaseManager:
-    """
-    Gestionnaire de connexion et requêtes à la base PostGIS
-    """
+    """Gestionnaire de connexion et requêtes à la base PostGIS."""
     
     def __init__(self):
-        """
-        Initialisation de la connexion à la base de données
-        """
         self.connection_params = {
             'host': os.getenv('SQL_HOST', 'db'),
             'port': os.getenv('SQL_PORT', '5432'),
@@ -26,207 +36,163 @@ class DatabaseManager:
         }
         self.conn = None
     
-    def connect(self):
-        """Établir la connexion à la base de données"""
+    def connect(self) -> bool:
+        """Établir la connexion à la base de données."""
         try:
             self.conn = psycopg2.connect(**self.connection_params)
             return True
-        except Exception as e:
-            print(f"Erreur de connexion à la base de données: {e}")
+        except Exception:
             return False
     
     def disconnect(self):
-        """Fermer la connexion à la base de données"""
+        """Fermer la connexion à la base de données."""
         if self.conn:
             self.conn.close()
             self.conn = None
     
     def execute_query(self, query: str, params: tuple = None) -> Optional[List[Dict]]:
-        """
-        Exécuter une requête SQL et retourner les résultats
-        
-        Args:
-            query: Requête SQL à exécuter
-            params: Paramètres de la requête (optionnel)
-        
-        Returns:
-            Liste de dictionnaires contenant les résultats
-        """
-        if not self.conn:
-            if not self.connect():
-                return None
+        """Exécuter une requête SQL et retourner les résultats."""
+        if not self.conn and not self.connect():
+            return None
         
         try:
             with self.conn.cursor(cursor_factory=RealDictCursor) as cursor:
                 cursor.execute(query, params)
-                results = cursor.fetchall()
-                return [dict(row) for row in results]
-        except Exception as e:
-            print(f"Erreur lors de l'exécution de la requête: {e}")
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception:
             return None
     
-    def get_bbox_filter(self, bbox: Tuple[float, float, float, float], buffer_percent: float = 0.1) -> str:
-        """
-        Créer un filtre PostGIS pour une bounding box avec buffer
-        
-        Args:
-            bbox: Tuple (min_lng, min_lat, max_lng, max_lat)
-            buffer_percent: Pourcentage de buffer à ajouter (défaut 10%)
-        
-        Returns:
-            Clause WHERE PostGIS pour filtrer par bbox
-        """
-        min_lng, min_lat, max_lng, max_lat = bbox
-        
-        # Ajouter un buffer pour éviter les problèmes de bord
-        lng_range = max_lng - min_lng
-        lat_range = max_lat - min_lat
-        buffer_lng = lng_range * buffer_percent
-        buffer_lat = lat_range * buffer_percent
-        
-        min_lng -= buffer_lng
-        min_lat -= buffer_lat
-        max_lng += buffer_lng
-        max_lat += buffer_lat
-        
-        return f"ST_Intersects(geom, ST_MakeEnvelope({min_lng}, {min_lat}, {max_lng}, {max_lat}, 4326))"
+    # ========================================================================
+    # UTILITAIRES DE REQUÊTE
+    # ========================================================================
     
-    def simplify_geometry(self, zoom_level: int) -> str:
-        """
-        Déterminer le niveau de simplification selon le zoom
+    def _bbox_filter(self, bbox: Tuple[float, float, float, float], 
+                     geom_col: str = 'geom', buffer: float = 0.1) -> str:
+        """Créer un filtre PostGIS pour une bounding box."""
+        min_lng, min_lat, max_lng, max_lat = bbox
+        lng_buf = (max_lng - min_lng) * buffer
+        lat_buf = (max_lat - min_lat) * buffer
         
-        Args:
-            zoom_level: Niveau de zoom de la carte (1-20)
+        return (f"ST_Intersects({geom_col}, ST_MakeEnvelope("
+                f"{min_lng - lng_buf}, {min_lat - lat_buf}, "
+                f"{max_lng + lng_buf}, {max_lat + lat_buf}, 4326))")
+    
+    def _simplify_expr(self, zoom: int, geom_col: str = 'geom', preserve: bool = False) -> str:
+        """Déterminer l'expression de simplification selon le zoom."""
+        tolerance = 0
+        for max_zoom, tol in sorted(ZOOM_TOLERANCE.values()):
+            if zoom <= max_zoom:
+                tolerance = tol
+                break
         
-        Returns:
-            Fragment SQL pour simplifier la géométrie
-        """
-        # Plus le zoom est faible, plus on simplifie
-        if zoom_level <= 8:
-            tolerance = 0.01  # Très simplifié
-        elif zoom_level <= 12:
-            tolerance = 0.001  # Simplifié
-        elif zoom_level <= 15:
-            tolerance = 0.0001  # Peu simplifié
+        if tolerance == 0:
+            return geom_col
+        
+        func = 'ST_SimplifyPreserveTopology' if preserve else 'ST_Simplify'
+        return f"{func}({geom_col}, {tolerance})"
+    
+    def _adaptive_limit(self, zoom: int, default: int = 1000) -> int:
+        """Calculer une limite adaptative selon le zoom."""
+        for max_zoom, limit in sorted(ZOOM_LIMITS.items()):
+            if zoom <= max_zoom:
+                return min(default, limit)
+        return default
+    
+    def _to_geojson(self, results: List[Dict], feature_type: str) -> Dict:
+        """Convertir les résultats SQL en GeoJSON."""
+        if not results:
+            return {'type': 'FeatureCollection', 'features': []}
+        
+        features = []
+        for row in results:
+            geometry = row.pop('geometry', None)
+            if geometry is None:
+                continue
+            
+            properties = dict(row)
+            properties['feature_type'] = feature_type
+            
+            features.append({
+                'type': 'Feature',
+                'geometry': geometry,
+                'properties': properties
+            })
+        
+        return {'type': 'FeatureCollection', 'features': features}
+    
+    def _build_filters(self, conditions: Dict[str, any]) -> Tuple[str, List]:
+        """Construire les filtres WHERE et les paramètres."""
+        filters = []
+        params = []
+        
+        for field, value in conditions.items():
+            if value and value not in ['Tous', 'Toutes']:
+                filters.append(f"{field} = %s")
+                params.append(value)
+        
+        filter_str = " AND " + " AND ".join(filters) if filters else ""
+        return filter_str, params
+    
+    def _get_distinct_values(self, table: str, column: str, 
+                             filter_col: str = None, filter_val: str = None) -> List[str]:
+        """Récupérer les valeurs distinctes d'une colonne."""
+        if filter_col and filter_val:
+            query = f"SELECT DISTINCT {column} FROM {table} WHERE {column} IS NOT NULL AND {filter_col} = %s ORDER BY {column}"
+            results = self.execute_query(query, (filter_val,))
         else:
-            tolerance = 0  # Pas de simplification
+            query = f"SELECT DISTINCT {column} FROM {table} WHERE {column} IS NOT NULL ORDER BY {column}"
+            results = self.execute_query(query)
         
-        if tolerance > 0:
-            return f"ST_Simplify(geom, {tolerance})"
-        return "geom"
+        return [r[column] for r in results] if results else []
     
     # ========================================================================
     # TRAJECTOIRES GNSS
     # ========================================================================
     
-    def get_trajectories_gnss(self, bbox: Tuple[float, float, float, float], 
-                              zoom: int, limit: int = 1000) -> Dict:
-        """
-        Récupérer les trajectoires GNSS dans la zone visible
-        
-        Args:
-            bbox: Bounding box (min_lng, min_lat, max_lng, max_lat)
-            zoom: Niveau de zoom
-            limit: Nombre maximum de points à retourner
-        
-        Returns:
-            GeoJSON FeatureCollection
-        """
-        geom_field = self.simplify_geometry(zoom)
-        bbox_filter = self.get_bbox_filter(bbox)
-        
+    def get_trajectories_gnss(self, bbox: Tuple, zoom: int, limit: int = 1000) -> Dict:
+        """Récupérer les trajectoires GNSS dans la zone visible."""
         query = f"""
-        SELECT 
-            trajectory_id,
-            user_id,
-            timestamp,
-            speed,
-            ST_AsGeoJSON({geom_field})::json AS geometry
+        SELECT trajectory_id, user_id, timestamp, speed,
+               ST_AsGeoJSON({self._simplify_expr(zoom)})::json AS geometry
         FROM trajectory_gnss
-        WHERE {bbox_filter}
-        ORDER BY timestamp DESC
-        LIMIT %s
+        WHERE {self._bbox_filter(bbox)}
+        ORDER BY timestamp DESC LIMIT %s
         """
-        
-        results = self.execute_query(query, (limit,))
-        return self._to_geojson(results, 'trajectory')
+        return self._to_geojson(self.execute_query(query, (limit,)), 'trajectory')
     
-    def get_trajectories_gnss_aggregated(self, bbox: Tuple[float, float, float, float],
-                                         zoom: int, grid_size: float = 0.01) -> Dict:
-        """
-        Récupérer les trajectoires GNSS agrégées par grille (pour zoom faible)
-        
-        Args:
-            bbox: Bounding box
-            zoom: Niveau de zoom
-            grid_size: Taille de la grille en degrés
-        
-        Returns:
-            GeoJSON avec densité par cellule
-        """
-        bbox_filter = self.get_bbox_filter(bbox)
-        
+    def get_trajectories_gnss_aggregated(self, bbox: Tuple, zoom: int, grid_size: float = 0.01) -> Dict:
+        """Récupérer les trajectoires GNSS agrégées par grille."""
         query = f"""
-        SELECT 
-            COUNT(*) as count,
-            AVG(speed) as avg_speed,
-            ST_AsGeoJSON(ST_Centroid(
-                ST_SnapToGrid(geom, {grid_size})
-            ))::json AS geometry
+        SELECT COUNT(*) as count, AVG(speed) as avg_speed,
+               ST_AsGeoJSON(ST_Centroid(ST_SnapToGrid(geom, {grid_size})))::json AS geometry
         FROM trajectory_gnss
-        WHERE {bbox_filter}
+        WHERE {self._bbox_filter(bbox)}
         GROUP BY ST_SnapToGrid(geom, {grid_size})
         HAVING COUNT(*) > 5
         """
-        
-        results = self.execute_query(query)
-        return self._to_geojson(results, 'heatmap')
+        return self._to_geojson(self.execute_query(query), 'heatmap')
     
     # ========================================================================
     # TRAJECTOIRES TÉLÉCOM
     # ========================================================================
     
-    def get_trajectories_telecom(self, bbox: Tuple[float, float, float, float],
-                                 zoom: int, limit: int = 1000) -> Dict:
-        """
-        Récupérer les trajectoires télécom dans la zone visible
-        """
-        geom_field = self.simplify_geometry(zoom)
-        bbox_filter = self.get_bbox_filter(bbox)
-        
+    def get_trajectories_telecom(self, bbox: Tuple, zoom: int, limit: int = 1000) -> Dict:
+        """Récupérer les trajectoires télécom dans la zone visible."""
         query = f"""
-        SELECT 
-            trajectory_id,
-            user_id,
-            timestamp,
-            ST_AsGeoJSON({geom_field.replace('geom', 'approximate_geom')})::json AS geometry
+        SELECT trajectory_id, user_id, timestamp,
+               ST_AsGeoJSON({self._simplify_expr(zoom, 'approximate_geom')})::json AS geometry
         FROM trajectory_telecom
-        WHERE {bbox_filter.replace('geom', 'approximate_geom')}
-        ORDER BY timestamp DESC
-        LIMIT %s
+        WHERE {self._bbox_filter(bbox, 'approximate_geom')}
+        ORDER BY timestamp DESC LIMIT %s
         """
-        
-        results = self.execute_query(query, (limit,))
-        return self._to_geojson(results, 'trajectory')
+        return self._to_geojson(self.execute_query(query, (limit,)), 'trajectory')
     
     # ========================================================================
     # MATRICE ORIGINE-DESTINATION
     # ========================================================================
     
-    def get_od_matrix(self, bbox: Tuple[float, float, float, float],
-                      start_time: str = None, end_time: str = None) -> Dict:
-        """
-        Récupérer les flux origine-destination
-        
-        Args:
-            bbox: Bounding box
-            start_time: Heure de début (format ISO)
-            end_time: Heure de fin (format ISO)
-        
-        Returns:
-            GeoJSON avec lignes représentant les flux
-        """
-        bbox_filter = self.get_bbox_filter(bbox)
+    def get_od_matrix(self, bbox: Tuple, start_time: str = None, end_time: str = None) -> Dict:
+        """Récupérer les flux origine-destination."""
         time_filter = ""
         params = []
         
@@ -234,406 +200,134 @@ class DatabaseManager:
             time_filter = "AND start_time BETWEEN %s AND %s"
             params = [start_time, end_time]
         
+        bbox_zo = self._bbox_filter(bbox, 'zo.geom')
+        bbox_zd = self._bbox_filter(bbox, 'zd.geom')
+        
         query = f"""
-        SELECT 
-            od.od_id,
-            od.trip_count,
-            od.avg_duration,
-            od.avg_distance,
-            zo.nom as origin_name,
-            zd.nom as destination_name,
-            ST_AsGeoJSON(
-                ST_MakeLine(
-                    ST_Centroid(zo.geom),
-                    ST_Centroid(zd.geom)
-                )
-            )::json AS geometry
+        SELECT od.od_id, od.trip_count, od.avg_duration, od.avg_distance,
+               zo.nom as origin_name, zd.nom as destination_name,
+               ST_AsGeoJSON(ST_MakeLine(ST_Centroid(zo.geom), ST_Centroid(zd.geom)))::json AS geometry
         FROM matrix_od od
         JOIN zone zo ON od.origin_zone = zo.id
         JOIN zone zd ON od.destination_zone = zd.id
-        WHERE ({bbox_filter.replace('geom', 'zo.geom')} 
-               OR {bbox_filter.replace('geom', 'zd.geom')})
-        {time_filter}
-        ORDER BY od.trip_count DESC
-        LIMIT 500
+        WHERE ({bbox_zo} OR {bbox_zd}) {time_filter}
+        ORDER BY od.trip_count DESC LIMIT 500
         """
-        
-        results = self.execute_query(query, tuple(params) if params else None)
-        return self._to_geojson(results, 'od_flow')
+        return self._to_geojson(self.execute_query(query, tuple(params) if params else None), 'od_flow')
     
     # ========================================================================
     # TRANSPORT PUBLIC
     # ========================================================================
     
-    def get_arrets(self, bbox: Tuple[float, float, float, float],
-                   type_transport: str = None) -> Dict:
-        """
-        Récupérer les arrêts de transport dans la zone
-        
-        Args:
-            bbox: Bounding box
-            type_transport: Filtrer par type (Bus, Tram, etc.)
-        
-        Returns:
-            GeoJSON FeatureCollection des arrêts
-        """
-        bbox_filter = self.get_bbox_filter(bbox)
-        type_filter = ""
-        params = []
-        
-        if type_transport:
-            type_filter = "AND t.nom = %s"
-            params = [type_transport]
+    def get_arrets(self, bbox: Tuple, type_transport: str = None) -> Dict:
+        """Récupérer les arrêts de transport dans la zone."""
+        type_filter, params = self._build_filters({'t.nom': type_transport})
         
         query = f"""
-        SELECT 
-            a.id_arret,
-            a.nom,
-            t.nom as type_transport,
-            ST_AsGeoJSON(a.position)::json AS geometry,
-            COUNT(DISTINCT al.id_ligne) as nb_lignes
+        SELECT a.id_arret, a.nom, t.nom as type_transport,
+               ST_AsGeoJSON(a.position)::json AS geometry,
+               COUNT(DISTINCT al.id_ligne) as nb_lignes
         FROM arret a
         LEFT JOIN type_transport t ON a.id_type = t.id
         LEFT JOIN arret_ligne al ON a.id_arret = al.id_arret
-        WHERE {bbox_filter.replace('geom', 'a.position')}
-        {type_filter}
+        WHERE {self._bbox_filter(bbox, 'a.position')} {type_filter}
         GROUP BY a.id_arret, a.nom, t.nom, a.position
         """
-        
-        results = self.execute_query(query, tuple(params) if params else None)
-        return self._to_geojson(results, 'stop')
+        return self._to_geojson(self.execute_query(query, tuple(params) if params else None), 'stop')
     
-    def get_lignes(self, bbox: Tuple[float, float, float, float],
-                   type_transport: str = None) -> Dict:
-        """
-        Récupérer les lignes de transport traversant la zone
-        
-        Returns:
-            GeoJSON avec les tracés des lignes
-        """
-        bbox_filter = self.get_bbox_filter(bbox)
-        type_filter = ""
-        params = []
-        
-        if type_transport:
-            type_filter = "AND t.nom = %s"
-            params = [type_transport]
+    def get_lignes(self, bbox: Tuple, type_transport: str = None) -> Dict:
+        """Récupérer les lignes de transport traversant la zone."""
+        type_filter, params = self._build_filters({'t.nom': type_transport})
         
         query = f"""
-        SELECT DISTINCT
-            l.id,
-            l.nom,
-            t.nom as type_transport,
-            l.capacity,
-            ST_AsGeoJSON(
-                ST_MakeLine(a.position ORDER BY al.id)
-            )::json AS geometry
+        SELECT DISTINCT l.id, l.nom, t.nom as type_transport, l.capacity,
+               ST_AsGeoJSON(ST_MakeLine(a.position ORDER BY al.id))::json AS geometry
         FROM ligne l
         JOIN type_transport t ON l.id_type = t.id
         JOIN arret_ligne al ON l.id = al.id_ligne
         JOIN arret a ON al.id_arret = a.id_arret
-        WHERE {bbox_filter.replace('geom', 'a.position')}
-        {type_filter}
+        WHERE {self._bbox_filter(bbox, 'a.position')} {type_filter}
         GROUP BY l.id, l.nom, t.nom, l.capacity
         """
-        
-        results = self.execute_query(query, tuple(params) if params else None)
-        return self._to_geojson(results, 'line')
+        return self._to_geojson(self.execute_query(query, tuple(params) if params else None), 'line')
     
     # ========================================================================
     # POINTS D'INTÉRÊT
     # ========================================================================
     
-    def get_poi(self, bbox: Tuple[float, float, float, float],
-                poi_type: str = None, poi_subtype: str = None, 
-                zoom: int = 14, limit: int = 1000) -> Dict:
-        """
-        Récupérer les points d'intérêt dans la zone
-        
-        Args:
-            bbox: Bounding box
-            poi_type: Filtrer par type de POI
-            poi_subtype: Filtrer par sous-type de POI
-            zoom: Niveau de zoom (pour adapter la limite)
-            limit: Nombre maximum de POI
-        
-        Returns:
-            GeoJSON FeatureCollection des POI
-        """
-        bbox_filter = self.get_bbox_filter(bbox)
-        filters = []
-        params = []
-        
-        if poi_type and poi_type not in ['Tous', 'Toutes']:
-            filters.append("type = %s")
-            params.append(poi_type)
-        
-        if poi_subtype and poi_subtype not in ['Tous', 'Toutes']:
-            filters.append("subtype = %s")
-            params.append(poi_subtype)
-        
-        type_filter = ""
-        if filters:
-            type_filter = "AND " + " AND ".join(filters)
-        
-        # Adapter la limite selon le zoom
-        if zoom <= 10:
-            adaptive_limit = min(limit, 100)
-        elif zoom <= 14:
-            adaptive_limit = min(limit, 500)
-        else:
-            adaptive_limit = limit
-        
+    def get_poi(self, bbox: Tuple, poi_type: str = None, 
+                poi_subtype: str = None, zoom: int = 14, limit: int = 1000) -> Dict:
+        """Récupérer les points d'intérêt dans la zone."""
+        type_filter, params = self._build_filters({'type': poi_type, 'subtype': poi_subtype})
+        adaptive_limit = self._adaptive_limit(zoom, limit)
         params.append(adaptive_limit)
         
         query = f"""
-        SELECT 
-            id,
-            nom,
-            type,
-            subtype,
-            description,
-            ST_AsGeoJSON(position)::json AS geometry
+        SELECT id, nom, type, subtype, description,
+               ST_AsGeoJSON(position)::json AS geometry
         FROM poi
-        WHERE {bbox_filter.replace('geom', 'position')}
-        {type_filter}
+        WHERE {self._bbox_filter(bbox, 'position')} {type_filter}
         LIMIT %s
         """
-        
-        results = self.execute_query(query, tuple(params))
-        return self._to_geojson(results, 'poi')
+        return self._to_geojson(self.execute_query(query, tuple(params)), 'poi')
     
     # ========================================================================
     # ZONES
     # ========================================================================
     
-    def get_zones(self, bbox: Tuple[float, float, float, float],
-                  zone_type: str = None, zone_subtype: str = None, 
-                  zoom: int = 14, limit: int = 200) -> Dict:
-        """
-        Récupérer les zones géographiques avec simplification adaptative
-        
-        Args:
-            bbox: Bounding box
-            zone_type: Filtrer par type de zone
-            zone_subtype: Filtrer par sous-type de zone
-            zoom: Niveau de zoom pour adapter la simplification
-            limit: Nombre maximum de zones
-        
-        Returns:
-            GeoJSON FeatureCollection des zones
-        """
-        bbox_filter = self.get_bbox_filter(bbox)
-        filters = []
-        params = []
-        
-        if zone_type and zone_type not in ['Tous', 'Toutes']:
-            filters.append("type = %s")
-            params.append(zone_type)
-        
-        if zone_subtype and zone_subtype not in ['Tous', 'Toutes']:
-            filters.append("subtype = %s")
-            params.append(zone_subtype)
-        
-        type_filter = ""
-        if filters:
-            type_filter = "AND " + " AND ".join(filters)
-        
-        # Simplification adaptative selon le zoom
-        # Utiliser ST_SimplifyPreserveTopology pour éviter les géométries vides
-        if zoom <= 10:
-            tolerance = 0.001
-        elif zoom <= 14:
-            tolerance = 0.0005
-        elif zoom <= 16:
-            tolerance = 0.0001
-        else:
-            tolerance = 0
-        
-        # ST_SimplifyPreserveTopology garantit que la géométrie reste valide
-        geom_expr = f"ST_SimplifyPreserveTopology(geom, {tolerance})" if tolerance > 0 else "geom"
-        
+    def get_zones(self, bbox: Tuple, zone_type: str = None,
+                  zone_subtype: str = None, zoom: int = 14, limit: int = 200) -> Dict:
+        """Récupérer les zones géographiques avec simplification adaptative."""
+        type_filter, params = self._build_filters({'type': zone_type, 'subtype': zone_subtype})
         params.append(limit)
         
+        geom_expr = self._simplify_expr(zoom, preserve=True)
+        
         query = f"""
-        SELECT 
-            id,
-            type,
-            subtype,
-            description,
-            ST_AsGeoJSON({geom_expr})::json AS geometry
+        SELECT id, type, subtype, description,
+               ST_AsGeoJSON({geom_expr})::json AS geometry
         FROM zone
-        WHERE {bbox_filter}
-        {type_filter}
-        ORDER BY ST_Area(geom) DESC
-        LIMIT %s
+        WHERE {self._bbox_filter(bbox)} {type_filter}
+        ORDER BY ST_Area(geom) DESC LIMIT %s
         """
-        
-        results = self.execute_query(query, tuple(params) if params else None)
-        return self._to_geojson(results, 'zone')
+        return self._to_geojson(self.execute_query(query, tuple(params)), 'zone')
     
     # ========================================================================
-    # UTILITAIRES
+    # ACCESSEURS TYPES/SUBTYPES
     # ========================================================================
-    
-    def _to_geojson(self, results: List[Dict], feature_type: str) -> Dict:
-        """
-        Convertir les résultats SQL en GeoJSON
-        
-        Args:
-            results: Résultats de la requête
-            feature_type: Type de feature pour les propriétés
-        
-        Returns:
-            GeoJSON FeatureCollection
-        """
-        if not results:
-            return {
-                'type': 'FeatureCollection',
-                'features': []
-            }
-        
-        features = []
-        for row in results:
-            # Extraire la géométrie
-            geometry = row.pop('geometry', None)
-            
-            # Ignorer les features sans géométrie valide
-            if geometry is None:
-                continue
-            
-            # Le reste devient les propriétés
-            properties = {k: v for k, v in row.items()}
-            properties['feature_type'] = feature_type
-            
-            feature = {
-                'type': 'Feature',
-                'geometry': geometry,
-                'properties': properties
-            }
-            features.append(feature)
-        
-        return {
-            'type': 'FeatureCollection',
-            'features': features
-        }
-    
-    def get_statistics(self, bbox: Tuple[float, float, float, float]) -> Dict:
-        """
-        Obtenir des statistiques sur les données dans la zone
-        
-        Returns:
-            Dictionnaire avec les comptages par type de données
-        """
-        bbox_filter = self.get_bbox_filter(bbox)
-        
-        stats = {}
-        
-        # Compter les trajectoires GNSS
-        query = f"SELECT COUNT(*) as count FROM trajectory_gnss WHERE {bbox_filter}"
-        result = self.execute_query(query)
-        stats['gnss_trajectories'] = result[0]['count'] if result else 0
-        
-        # Compter les arrêts
-        query = f"SELECT COUNT(*) as count FROM arret WHERE {bbox_filter.replace('geom', 'position')}"
-        result = self.execute_query(query)
-        stats['stops'] = result[0]['count'] if result else 0
-        
-        # Compter les POI
-        query = f"SELECT COUNT(*) as count FROM poi WHERE {bbox_filter.replace('geom', 'position')}"
-        result = self.execute_query(query)
-        stats['poi'] = result[0]['count'] if result else 0
-        
-        return stats
     
     def get_poi_types(self) -> List[str]:
-        """
-        Récupérer la liste des types de POI disponibles
-        
-        Returns:
-            Liste des types uniques
-        """
-        query = """
-        SELECT DISTINCT type 
-        FROM poi 
-        WHERE type IS NOT NULL 
-        ORDER BY type
-        """
-        results = self.execute_query(query)
-        return [r['type'] for r in results] if results else []
+        return self._get_distinct_values('poi', 'type')
     
     def get_poi_subtypes(self, poi_type: str = None) -> List[str]:
-        """
-        Récupérer la liste des sous-types de POI disponibles
-        
-        Args:
-            poi_type: Filtrer par type (optionnel)
-        
-        Returns:
-            Liste des sous-types uniques
-        """
-        if poi_type:
-            query = """
-            SELECT DISTINCT subtype 
-            FROM poi 
-            WHERE subtype IS NOT NULL AND type = %s
-            ORDER BY subtype
-            """
-            results = self.execute_query(query, (poi_type,))
-        else:
-            query = """
-            SELECT DISTINCT subtype 
-            FROM poi 
-            WHERE subtype IS NOT NULL 
-            ORDER BY subtype
-            """
-            results = self.execute_query(query)
-        return [r['subtype'] for r in results] if results else []
+        return self._get_distinct_values('poi', 'subtype', 'type', poi_type)
     
     def get_zone_types(self) -> List[str]:
-        """
-        Récupérer la liste des types de zones disponibles
-        
-        Returns:
-            Liste des types uniques
-        """
-        query = """
-        SELECT DISTINCT type 
-        FROM zone 
-        WHERE type IS NOT NULL 
-        ORDER BY type
-        """
-        results = self.execute_query(query)
-        return [r['type'] for r in results] if results else []
+        return self._get_distinct_values('zone', 'type')
     
     def get_zone_subtypes(self, zone_type: str = None) -> List[str]:
-        """
-        Récupérer la liste des sous-types de zones disponibles
+        return self._get_distinct_values('zone', 'subtype', 'type', zone_type)
+    
+    # ========================================================================
+    # STATISTIQUES
+    # ========================================================================
+    
+    def get_statistics(self, bbox: Tuple) -> Dict:
+        """Obtenir des statistiques sur les données dans la zone."""
+        tables = {
+            'gnss_trajectories': ('trajectory_gnss', 'geom'),
+            'stops': ('arret', 'position'),
+            'poi': ('poi', 'position')
+        }
         
-        Args:
-            zone_type: Filtrer par type (optionnel)
+        stats = {}
+        for key, (table, geom_col) in tables.items():
+            query = f"SELECT COUNT(*) as count FROM {table} WHERE {self._bbox_filter(bbox, geom_col)}"
+            result = self.execute_query(query)
+            stats[key] = result[0]['count'] if result else 0
         
-        Returns:
-            Liste des sous-types uniques
-        """
-        if zone_type:
-            query = """
-            SELECT DISTINCT subtype 
-            FROM zone 
-            WHERE subtype IS NOT NULL AND type = %s
-            ORDER BY subtype
-            """
-            results = self.execute_query(query, (zone_type,))
-        else:
-            query = """
-            SELECT DISTINCT subtype 
-            FROM zone 
-            WHERE subtype IS NOT NULL 
-            ORDER BY subtype
-            """
-            results = self.execute_query(query)
-        return [r['subtype'] for r in results] if results else []
+        return stats
 
 
-# Instance globale du gestionnaire
+# Instance globale
 db_manager = DatabaseManager()

@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="/static/css/carte.css">
+    <link rel="stylesheet" href="/static/css/carte.css?v=2">
 </head>
 <body>
     <div class="app-container">
@@ -102,6 +102,9 @@
             }
         };
     </script>
-    <script src="/static/js/carte.js"></script>
+    <!-- Fichiers JS modulaires -->
+    <script src="/static/js/carte-config.js?v=1"></script>
+    <script src="/static/js/carte-utils.js?v=1"></script>
+    <script src="/static/js/carte-controller.js?v=1"></script>
 </body>
 </html>

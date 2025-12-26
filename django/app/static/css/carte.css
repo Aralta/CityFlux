@@ -619,3 +619,60 @@ input:checked + .toggle-slider:before {
         transform: translateX(0);
     }
 }
+
+/* === Marqueurs emoji personnalisés === */
+.emoji-marker-container {
+    background: transparent;
+    border: none;
+}
+
+.emoji-marker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.5));
+    cursor: pointer;
+    transition: transform 0.15s ease-out;
+}
+
+.emoji-marker:hover {
+    transform: scale(1.2);
+}
+
+/* Animation d'apparition des marqueurs */
+.emoji-marker-container {
+    animation: markerAppear 0.3s ease-out;
+}
+
+@keyframes markerAppear {
+    0% {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.8);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Style pour le cluster de marqueurs avec emojis */
+.marker-cluster-emoji {
+    background-color: rgba(26, 115, 232, 0.6);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.marker-cluster-emoji div {
+    background-color: rgba(26, 115, 232, 0.9);
+    border-radius: 50%;
+    color: white;
+    font-weight: bold;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

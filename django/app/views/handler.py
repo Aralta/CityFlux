@@ -1,10 +1,9 @@
 """
 Gestionnaire des vues pour la console base de données et les jobs Spark
 """
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 from django.shortcuts import render
 from django.db import connection
-from django.middleware.csrf import get_token
 from django.views.decorators.csrf import csrf_protect
 
 

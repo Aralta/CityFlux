@@ -45,8 +45,10 @@ mobilite-urbaine/
 │   │   │   │   ├── enhanced_data.css
 │   │   │   │   ├── multi_console.css
 │   │   │   │   └── style.css
-│   │   │   └── js/
-│   │   │       ├── carte.js
+│   │   │   └── js/                 # Script JS des templates 
+│   │   │       ├── carte-config.js     
+│   │   │       ├── carte-utils.js      
+│   │   │       ├── carte-controller.js 
 │   │   │       ├── enhanced_data.js
 │   │   │       └── multi_console.js
 │   │   ├── templates/              # Templates HTML
@@ -58,10 +60,10 @@ mobilite-urbaine/
 │   │   │   └── spark_upper.html
 │   │   └── views/                  # Vues Python
 │   │       ├── __init__.py
-│   │       ├── carte.py
-│   │       ├── database.py
+│   │       ├── carte.py            
+│   │       ├── database.py         
 │   │       ├── docker_console.py
-│   │       ├── get_enhanced_data.py
+│   │       ├── get_enhanced_data.py 
 │   │       └── handler.py
 │   ├── Dockerfile
 │   ├── entrypoint.sh
@@ -69,7 +71,7 @@ mobilite-urbaine/
 │   └── settings.py
 ├── spark/                          # Configuration Apache Spark
 │   ├── app/                        # Applications Spark Python
-│   │   ├── map_data_process.py
+│   │   ├── map_data_process.py     
 │   │   ├── spark_job_listener.py
 │   │   └── upper.py
 │   ├── Dockerfile
@@ -355,6 +357,32 @@ Objectif : avoir un **réseau overlay** et un placement multi-nœuds sans gérer
 - Surveillez les logs avec `docker compose logs -f`
 - Utilisez des volumes nommés pour les données persistantes
 - Régulièrement : `docker compose down -v` puis rebuild pour nettoyer
+
+## Architecture du code
+
+Le code a été refactorisé pour suivre les bonnes pratiques :
+
+### Frontend JavaScript (`django/app/static/js/`)
+
+| Fichier | Lignes | Description |
+|---------|--------|-------------|
+| `carte-config.js` | ~270 | Configurations : `POI_ICONS`, `ZONE_COLORS`, `TILE_CONFIGS` |
+| `carte-utils.js` | ~130 | Utilitaires : `getPOIIcon()`, `getZoneColor()`, `createEmojiIcon()` |
+| `carte-controller.js` | ~540 | Classe `MapController` et initialisation |
+
+### Backend Python (`django/app/views/`)
+
+| Fichier | Lignes | Description |
+|---------|--------|-------------|
+| `carte.py` | ~265 | API carte avec `LAYERS_CONFIG` centralisé |
+| `database.py` | ~280 | Gestionnaire PostGIS DRY avec méthodes utilitaires |
+| `get_enhanced_data.py` | ~180 | API Overpass avec `OSM_DATA_CONFIG` centralisé |
+
+### Spark (`spark/app/`)
+
+| Fichier | Lignes | Description |
+|---------|--------|-------------|
+| `map_data_process.py` | ~310 | Traitement données avec mappings centralisés |
 
 ## Fichiers importants
 
