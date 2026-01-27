@@ -16,49 +16,49 @@ class MapController {
         this.currentDetailLayer = null;
         this.baseTileLayer = null;
         this.searchMarker = null;
-        
+
         this.dataCache = {};
         this.cacheExpiry = 30 * 60 * 1000;
-        
+
         this.moveTimeout = null;
         this.debounceDelay = 300;
-        
+
         this.isLoading = {};
         this.pendingRequests = new Set();
         this.lastLoadedBounds = {};
-        
+
         this.init();
     }
-    
+
     init() {
         this.initMap();
         this.loadLayers();
         this.setupEventListeners();
     }
-    
+
     initMap() {
         this.map = L.map('map').setView(
             this.config.defaultCenter,
             this.config.defaultZoom
         );
-        
+
         this.baseTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '© OpenStreetMap contributors'
         }).addTo(this.map);
-        
+
         this.map.on('moveend', () => this.debouncedReload());
     }
-    
+
     debouncedReload() {
         if (this.moveTimeout) clearTimeout(this.moveTimeout);
         this.moveTimeout = setTimeout(() => this.reloadVisibleLayers(), this.debounceDelay);
     }
-    
+
     reloadVisibleLayers() {
         const currentBounds = this.getCurrentBounds();
         const layersToLoad = [];
-        
+
         for (const layerId in this.layers) {
             if (this.layers[layerId].enabled && layerId !== 'background') {
                 if (this.needsReload(layerId, currentBounds)) {
@@ -66,33 +66,33 @@ class MapController {
                 }
             }
         }
-        
+
         if (layersToLoad.length === 0) return;
-        
+
         Promise.all(layersToLoad.map(layerId => this.loadLayerData(layerId)));
     }
-    
+
     needsReload(layerId, currentBounds) {
         const lastBounds = this.lastLoadedBounds[layerId];
         if (!lastBounds) return true;
-        
+
         const margin = 0.1;
         const lastWidth = lastBounds.maxLng - lastBounds.minLng;
         const lastHeight = lastBounds.maxLat - lastBounds.minLat;
-        
+
         const safeZone = {
             minLng: lastBounds.minLng + lastWidth * margin,
             maxLng: lastBounds.maxLng - lastWidth * margin,
             minLat: lastBounds.minLat + lastHeight * margin,
             maxLat: lastBounds.maxLat - lastHeight * margin
         };
-        
+
         return currentBounds.minLng < safeZone.minLng ||
-               currentBounds.maxLng > safeZone.maxLng ||
-               currentBounds.minLat < safeZone.minLat ||
-               currentBounds.maxLat > safeZone.maxLat;
+            currentBounds.maxLng > safeZone.maxLng ||
+            currentBounds.minLat < safeZone.minLat ||
+            currentBounds.maxLat > safeZone.maxLat;
     }
-    
+
     getCurrentBounds() {
         const bounds = this.map.getBounds();
         return {
@@ -103,21 +103,21 @@ class MapController {
             zoom: this.map.getZoom()
         };
     }
-    
+
     async loadLayers() {
         try {
             const response = await fetch(this.config.apiEndpoints.layers);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
+
             const data = await response.json();
-            
+
             this.layers = {};
             data.layers.forEach(layer => {
                 this.layers[layer.id] = layer;
             });
-            
+
             this.renderLayersList();
-            
+
             for (const layerId in this.layers) {
                 if (this.layers[layerId].enabled && layerId !== 'background') {
                     await this.loadLayerData(layerId);
@@ -128,25 +128,25 @@ class MapController {
             this.showError('Impossible de charger les couches');
         }
     }
-    
+
     renderLayersList() {
         const layersList = document.getElementById('layersList');
         layersList.innerHTML = '';
-        
+
         for (const layerId in this.layers) {
             const layer = this.layers[layerId];
-            
+
             const layerItem = document.createElement('div');
             layerItem.className = 'layer-item';
             layerItem.dataset.layerId = layerId;
-            
+
             const toggleHTML = layer.hasToggle !== false ? `
                 <label class="toggle-switch">
                     <input type="checkbox" class="layer-toggle" data-layer-id="${layerId}" ${layer.enabled ? 'checked' : ''}>
                     <span class="toggle-slider"></span>
                 </label>
             ` : '';
-            
+
             layerItem.innerHTML = `
                 <div class="layer-header">
                     <div class="layer-info" data-layer-id="${layerId}">
@@ -157,37 +157,37 @@ class MapController {
                 </div>
                 <div class="layer-description">${layer.description}</div>
             `;
-            
+
             layersList.appendChild(layerItem);
         }
-        
+
         this.setupLayerEvents();
     }
-    
+
     setupLayerEvents() {
         document.querySelectorAll('.layer-toggle').forEach(toggle => {
             toggle.addEventListener('change', (e) => {
                 this.toggleLayer(e.target.dataset.layerId, e.target.checked);
             });
         });
-        
+
         document.querySelectorAll('.layer-info').forEach(info => {
             info.addEventListener('click', (e) => {
                 this.showLayerDetails(e.currentTarget.dataset.layerId);
             });
         });
     }
-    
+
     async toggleLayer(layerId, enabled) {
         this.layers[layerId].enabled = enabled;
-        
+
         if (enabled) {
             await this.loadLayerData(layerId);
         } else {
             this.hideLayerData(layerId);
         }
     }
-    
+
     getCacheKey(layerId, filters) {
         let key = layerId;
         if (filters && Object.keys(filters).length > 0) {
@@ -196,11 +196,11 @@ class MapController {
         }
         return key;
     }
-    
+
     addToCache(cacheKey, newFeatures, bounds) {
         const cached = this.dataCache[cacheKey];
         const now = Date.now();
-        
+
         if (!cached || (now - cached.timestamp) >= this.cacheExpiry) {
             this.dataCache[cacheKey] = {
                 features: new Map(),
@@ -208,22 +208,22 @@ class MapController {
                 timestamp: now
             };
         }
-        
+
         const cache = this.dataCache[cacheKey];
-        
+
         for (const feature of newFeatures) {
             const featureId = this.getFeatureId(feature);
             if (!cache.features.has(featureId)) {
                 cache.features.set(featureId, feature);
             }
         }
-        
+
         if (bounds) {
             cache.bounds = this.mergeBounds(cache.bounds, bounds);
         }
         cache.timestamp = now;
     }
-    
+
     getFeatureId(feature) {
         if (feature.properties?.id) {
             return `${feature.properties.feature_type || 'f'}_${feature.properties.id}`;
@@ -234,7 +234,7 @@ class MapController {
         }
         return Math.random().toString(36);
     }
-    
+
     mergeBounds(bounds1, bounds2) {
         if (!bounds1) return bounds2;
         if (!bounds2) return bounds1;
@@ -245,7 +245,7 @@ class MapController {
             maxLat: Math.max(bounds1.maxLat, bounds2.maxLat)
         };
     }
-    
+
     getCachedFeatures(cacheKey) {
         const cached = this.dataCache[cacheKey];
         if (cached && cached.features) {
@@ -253,39 +253,52 @@ class MapController {
         }
         return [];
     }
-    
+
     clearLayerCache(layerId, keepDisplayed = false) {
-        const keysToRemove = Object.keys(this.dataCache).filter(key => 
+        const keysToRemove = Object.keys(this.dataCache).filter(key =>
             key === layerId || key.startsWith(layerId + '_')
         );
         keysToRemove.forEach(key => delete this.dataCache[key]);
         delete this.lastLoadedBounds[layerId];
     }
-    
+
     async loadLayerData(layerId) {
         const layer = this.layers[layerId];
         const bounds = this.getCurrentBounds();
-        
+
         const activeFilters = {};
+        let hasEmptyMultiselect = false;
+
         if (layer.filters) {
             layer.filters.forEach(filter => {
                 if (filter.value && filter.value !== 'Tous' && filter.value !== 'Toutes') {
-                    activeFilters[filter.name] = filter.value;
+                    // Vérifier si c'est un tableau vide (multiselect avec rien de sélectionné)
+                    if (Array.isArray(filter.value) && filter.value.length === 0) {
+                        hasEmptyMultiselect = true;
+                    } else {
+                        activeFilters[filter.name] = filter.value;
+                    }
                 }
             });
         }
-        
+
+        // Si un filtre multiselect est vide, cacher la couche
+        if (hasEmptyMultiselect) {
+            this.hideLayerData(layerId);
+            return;
+        }
+
         const cacheKey = this.getCacheKey(layerId, activeFilters);
-        
+
         if (this.pendingRequests.has(cacheKey)) return;
-        
+
         this.isLoading[layerId] = true;
-        
+
         try {
             this.pendingRequests.add(cacheKey);
-            
+
             const expandedBounds = this.expandBounds(bounds, 0.5);
-            
+
             const params = new URLSearchParams({
                 minLng: expandedBounds.minLng,
                 minLat: expandedBounds.minLat,
@@ -293,35 +306,39 @@ class MapController {
                 maxLat: expandedBounds.maxLat,
                 zoom: bounds.zoom
             });
-            
+
             Object.entries(activeFilters).forEach(([name, value]) => {
-                params.append(name, value);
+                if (Array.isArray(value)) {
+                    value.forEach(v => params.append(name, v));
+                } else {
+                    params.append(name, value);
+                }
             });
-            
+
             const url = `${this.config.apiEndpoints.layerData.replace('{id}', layerId)}?${params}`;
             const response = await fetch(url);
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
+
             const data = await response.json();
-            
+
             if (data.error) {
                 console.warn(`⚠️ Erreur API pour ${layerId}:`, data.error);
                 return;
             }
-            
+
             if (data.features && data.features.length > 0) {
                 this.addToCache(cacheKey, data.features, expandedBounds);
                 this.lastLoadedBounds[layerId] = this.mergeBounds(
-                    this.lastLoadedBounds[layerId], 
+                    this.lastLoadedBounds[layerId],
                     expandedBounds
                 );
             }
-            
+
             this.displayLayerFeatures(layerId, cacheKey);
-            
+
         } catch (error) {
             console.error(`❌ Erreur chargement ${layerId}:`, error);
             const existingFeatures = this.getCachedFeatures(cacheKey);
@@ -333,7 +350,7 @@ class MapController {
             this.isLoading[layerId] = false;
         }
     }
-    
+
     expandBounds(bounds, percent) {
         const lngRange = bounds.maxLng - bounds.minLng;
         const latRange = bounds.maxLat - bounds.minLat;
@@ -345,14 +362,14 @@ class MapController {
             zoom: bounds.zoom
         };
     }
-    
+
     displayLayerFeatures(layerId, cacheKey) {
         const layer = this.layers[layerId];
         const config = layer.config;
         const features = this.getCachedFeatures(cacheKey);
-        
+
         if (features.length === 0) return;
-        
+
         const validFeatures = features.filter(f => {
             if (!f.geometry || !f.geometry.coordinates) return false;
             const coords = f.geometry.coordinates;
@@ -364,17 +381,17 @@ class MapController {
             }
             return true;
         });
-        
+
         if (validFeatures.length === 0) return;
-        
+
         const oldLayerGroup = this.layerGroups[layerId];
         this.layerGroups[layerId] = L.layerGroup();
-        
+
         const displayData = {
             type: 'FeatureCollection',
             features: validFeatures
         };
-        
+
         if (layer.type === 'geojson' || layer.type === 'polygon') {
             L.geoJSON(displayData, {
                 style: (feature) => {
@@ -396,20 +413,48 @@ class MapController {
                         fillOpacity: config.fillOpacity || 0.3
                     };
                 },
+                pointToLayer: (feature, latlng) => {
+                    // Les points individuels des traces ne sont plus affichés pour alléger la carte
+                    if (layerId === 'traces' && feature.properties.feature_type === 'point') {
+                        return null;
+                    }
+                    if (layer.type === 'geojson' && feature.geometry.type === 'Point') {
+                        return L.marker(latlng);
+                    }
+                    return null;
+                },
                 onEachFeature: (feature, layerObj) => {
                     if (feature.properties) {
                         layerObj.bindPopup(this.createPopupContent(feature.properties));
+
+                        // Effet de sélection pour les traces GNSS
+                        if (layerId === 'traces' && feature.geometry.type === 'LineString') {
+                            layerObj.on('popupopen', () => {
+                                layerObj.setStyle({
+                                    color: '#3498db', // Bleu
+                                    weight: (config.weight || 2) + 2,
+                                    opacity: 1
+                                });
+                            });
+                            layerObj.on('popupclose', () => {
+                                layerObj.setStyle({
+                                    color: config.color || '#FF0000', // Rouge par défaut
+                                    weight: config.weight || 2,
+                                    opacity: config.opacity || 0.7
+                                });
+                            });
+                        }
                     }
                 }
             }).addTo(this.layerGroups[layerId]);
-            
+
         } else if (layer.type === 'markers') {
             if (validFeatures.length > 100 && typeof L.markerClusterGroup !== 'undefined') {
                 const markers = L.markerClusterGroup();
                 validFeatures.forEach(feature => {
                     const coords = feature.geometry.coordinates;
                     let marker;
-                    
+
                     if (layerId === 'poi' && feature.properties) {
                         const emoji = getPOIIcon(feature.properties);
                         const iconSize = config.iconSize ? config.iconSize[0] : 28;
@@ -417,7 +462,7 @@ class MapController {
                     } else {
                         marker = L.marker([coords[1], coords[0]]);
                     }
-                    
+
                     if (feature.properties) {
                         marker.bindPopup(this.createPopupContent(feature.properties));
                     }
@@ -428,7 +473,7 @@ class MapController {
                 validFeatures.forEach(feature => {
                     const coords = feature.geometry.coordinates;
                     let marker;
-                    
+
                     if (layerId === 'poi' && feature.properties) {
                         const emoji = getPOIIcon(feature.properties);
                         const iconSize = config.iconSize ? config.iconSize[0] : 28;
@@ -436,7 +481,7 @@ class MapController {
                     } else {
                         marker = L.marker([coords[1], coords[0]]);
                     }
-                    
+
                     if (feature.properties) {
                         marker.bindPopup(this.createPopupContent(feature.properties));
                     }
@@ -444,26 +489,26 @@ class MapController {
                 });
             }
         }
-        
+
         this.layerGroups[layerId].addTo(this.map);
-        
+
         if (oldLayerGroup) {
             this.map.removeLayer(oldLayerGroup);
         }
     }
-    
+
     createPopupContent(properties) {
         let content = '<div class="popup-content">';
-        
+
         let ignoreKeys = ['feature_type', 'id'];
         if (properties.feature_type === 'poi') {
             ignoreKeys.push('type');
         }
-        
+
         if (properties.nom || properties.name) {
             content += `<h4>${properties.nom || properties.name}</h4>`;
         }
-        
+
         for (const key in properties) {
             if (!ignoreKeys.includes(key) && key !== 'nom' && key !== 'name') {
                 const value = properties[key];
@@ -473,49 +518,69 @@ class MapController {
                 }
             }
         }
-        
+
         content += '</div>';
         return content;
     }
-    
+
     hideLayerData(layerId) {
         if (this.layerGroups[layerId]) {
             this.map.removeLayer(this.layerGroups[layerId]);
         }
     }
-    
+
     async showLayerDetails(layerId) {
         try {
             const url = this.config.apiEndpoints.layerConfig.replace('{id}', layerId);
             const response = await fetch(url);
             const config = await response.json();
-            
+
+            // Préserver les valeurs actuelles si elles existent
+            const oldLayer = this.layers[layerId];
+            if (oldLayer) {
+                if (config.filters && oldLayer.filters) {
+                    config.filters.forEach(f => {
+                        const oldF = oldLayer.filters.find(of => of.name === f.name);
+                        if (oldF && oldF.value !== undefined) f.value = oldF.value;
+                    });
+                }
+                if (config.parameters && oldLayer.parameters) {
+                    config.parameters.forEach(p => {
+                        const oldP = oldLayer.parameters.find(op => op.name === p.name);
+                        if (oldP && oldP.value !== undefined) p.value = oldP.value;
+                    });
+                }
+            }
+
+            // Stocker la config complète pour accès ultérieur (hiérarchie)
+            this.layers[layerId] = { ...this.layers[layerId], ...config };
+
             this.currentDetailLayer = layerId;
-            
+
             const detailMenu = document.getElementById('detailMenu');
             const detailTitle = document.getElementById('detailTitle');
             const detailContent = document.getElementById('detailContent');
-            
+
             detailTitle.textContent = `${config.icon || ''} ${config.name}`;
-            
+
             let content = '';
-            
+
             if (config.parameters && config.parameters.length > 0) {
                 content += '<div class="detail-section"><h4>Paramètres visuels</h4>';
                 config.parameters.forEach(param => {
-                    content += this.renderParameter(param);
+                    content += this.renderParameter(param, config);
                 });
                 content += '</div>';
             }
-            
+
             if (config.filters && config.filters.length > 0) {
                 content += '<div class="detail-section"><h4>Filtres</h4>';
                 config.filters.forEach(filter => {
-                    content += this.renderParameter(filter);
+                    content += this.renderParameter(filter, config);
                 });
                 content += '</div>';
             }
-            
+
             if (config.info) {
                 content += '<div class="detail-section"><h4>Informations</h4>';
                 content += '<div class="info-grid">';
@@ -525,19 +590,24 @@ class MapController {
                 }
                 content += '</div></div>';
             }
-            
+
             detailContent.innerHTML = content;
             detailMenu.classList.remove('hidden');
-            
+
             this.setupDetailEvents(layerId);
         } catch (error) {
-            // Erreur silencieuse
+            console.error('Error showing layer details:', error);
         }
     }
-    
-    renderParameter(param) {
+
+    renderParameter(param, config) {
+        // Cacher le filtre "subtype" s'il est déjà géré par la hiérarchie du filtre "type"
+        if (param.name === 'subtype' && config && config.filters.find(f => f.name === 'type' && config.hierarchy)) {
+            return '';
+        }
+
         let html = `<div class="parameter-item"><label class="parameter-label">${param.label}</label>`;
-        
+
         switch (param.type) {
             case 'color':
                 html += `<input type="color" class="parameter-control" data-param="${param.name}" value="${param.value}">`;
@@ -560,25 +630,88 @@ class MapController {
                 html += `</select>`;
                 break;
             case 'multiselect':
-                param.options.forEach(opt => {
-                    const checked = param.value.includes(opt);
-                    html += `<label class="checkbox-label">
-                        <input type="checkbox" class="parameter-control" data-param="${param.name}" value="${opt}" ${checked ? 'checked' : ''}>${opt}
-                    </label>`;
-                });
+                const selectedCount = param.value ? param.value.length : 0;
+                const isHierarchical = param.name === 'type' && config && config.hierarchy;
+
+                html += `
+                <div class="multiselect-container" data-param="${param.name}">
+                    <div class="multiselect-header" onclick="this.parentElement.classList.toggle('open')">
+                        <span class="selected-text">${selectedCount} sélectionné(s)</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </div>
+                    <div class="multiselect-dropdown">
+                        <div class="multiselect-actions">
+                            <button class="action-btn select-all" data-param="${param.name}">Tout cocher</button>
+                            <button class="action-btn deselect-all" data-param="${param.name}">Tout décocher</button>
+                        </div>
+                        <div class="multiselect-options">`;
+
+                if (isHierarchical) {
+                    // Si on est sur le filtre "type", on groupe les subtypes en dessous
+                    const hierarchy = config.hierarchy;
+                    const subtypeFilter = config.filters.find(f => f.name === 'subtype');
+
+                    Object.entries(hierarchy).forEach(([type, subtypes]) => {
+                        const typeChecked = param.value.includes(type);
+                        html += `
+                        <div class="hierarchy-group">
+                            <label class="checkbox-label parent-type">
+                                <input type="checkbox" class="parameter-control" data-param="type" value="${type}" ${typeChecked ? 'checked' : ''}>
+                                <span class="checkbox-custom"></span>
+                                <span class="option-text"><strong>${type}</strong></span>
+                            </label>
+                            <div class="hierarchy-subtypes">`;
+
+                        subtypes.forEach(st => {
+                            const stChecked = subtypeFilter ? subtypeFilter.value.includes(st) : false;
+                            html += `
+                                <label class="checkbox-label nested-subtype">
+                                    <input type="checkbox" class="parameter-control" data-param="subtype" value="${st}" ${stChecked ? 'checked' : ''}>
+                                    <span class="checkbox-custom"></span>
+                                    <span class="option-text">${st}</span>
+                                </label>`;
+                        });
+
+                        html += `</div></div>`;
+                    });
+                } else {
+                    // Affichage standard pour les multiselects non hiérarchiques
+                    param.options.forEach(opt => {
+                        const checked = param.value.includes(opt);
+                        html += `
+                                <label class="checkbox-label">
+                                    <input type="checkbox" class="parameter-control" data-param="${param.name}" value="${opt}" ${checked ? 'checked' : ''}>
+                                    <span class="checkbox-custom"></span>
+                                    <span class="option-text">${opt}</span>
+                                </label>`;
+                    });
+                }
+
+                html += `
+                        </div>
+                    </div>
+                </div>`;
                 break;
         }
-        
+
         html += `</div>`;
         return html;
     }
-    
+
     setupDetailEvents(layerId) {
         document.querySelectorAll('#detailContent .parameter-control').forEach(control => {
             control.addEventListener('change', (e) => {
+                this.handleHierarchicalChange(layerId, e.target);
                 this.updateLayerParameter(layerId, e.target);
+
+                // Mettre à jour le texte du header multiselect si nécessaire
+                if (e.target.closest('.multiselect-container')) {
+                    const container = e.target.closest('.multiselect-container');
+                    const checkedCount = container.querySelectorAll('.parameter-control:checked').length;
+                    container.querySelector('.selected-text').textContent = `${checkedCount} sélectionné(s)`;
+                }
             });
-            
+
             if (control.type === 'range') {
                 control.addEventListener('input', (e) => {
                     const valueSpan = e.target.nextElementSibling;
@@ -586,23 +719,178 @@ class MapController {
                 });
             }
         });
+
+        // Gestion des boutons Tout cocher / Tout décocher
+        document.querySelectorAll('.action-btn.select-all').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const container = e.target.closest('.multiselect-container');
+                const checkboxes = container.querySelectorAll('.parameter-control');
+                checkboxes.forEach(cb => cb.checked = true);
+
+                // Mettre à jour tous les filtres distincts (type et subtype)
+                const layer = this.layers[layerId];
+                if (layer && layer.hierarchy) {
+                    // Mettre à jour le filtre type
+                    const typeCheckbox = container.querySelector('.parameter-control[data-param="type"]');
+                    if (typeCheckbox) this.updateLayerParameter(layerId, typeCheckbox);
+                    // Mettre à jour le filtre subtype
+                    const subtypeCheckbox = container.querySelector('.parameter-control[data-param="subtype"]');
+                    if (subtypeCheckbox) this.updateLayerParameter(layerId, subtypeCheckbox);
+                } else if (checkboxes.length > 0) {
+                    this.updateLayerParameter(layerId, checkboxes[0]);
+                }
+
+                container.querySelector('.selected-text').textContent = `${checkboxes.length} sélectionné(s)`;
+            });
+        });
+
+        document.querySelectorAll('.action-btn.deselect-all').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const container = e.target.closest('.multiselect-container');
+                const checkboxes = container.querySelectorAll('.parameter-control');
+                checkboxes.forEach(cb => cb.checked = false);
+
+                // Mettre à jour tous les filtres distincts (type et subtype)
+                const layer = this.layers[layerId];
+                if (layer && layer.hierarchy) {
+                    // Mettre à jour le filtre type
+                    const typeCheckbox = container.querySelector('.parameter-control[data-param="type"]');
+                    if (typeCheckbox) this.updateLayerParameter(layerId, typeCheckbox);
+                    // Mettre à jour le filtre subtype
+                    const subtypeCheckbox = container.querySelector('.parameter-control[data-param="subtype"]');
+                    if (subtypeCheckbox) this.updateLayerParameter(layerId, subtypeCheckbox);
+                } else if (checkboxes.length > 0) {
+                    this.updateLayerParameter(layerId, checkboxes[0]);
+                }
+
+                container.querySelector('.selected-text').textContent = `0 sélectionné(s)`;
+            });
+        });
     }
-    
+
+    handleHierarchicalChange(layerId, control) {
+        const paramName = control.dataset.param;
+        const layer = this.layers[layerId];
+        if (!layer || !layer.hierarchy) return;
+
+        // Si on change un "type" (parent)
+        if (paramName === 'type') {
+            const isChecked = control.checked;
+            const typeValue = control.value;
+            const subtypesToToggle = layer.hierarchy[typeValue] || [];
+
+            // Trouver toutes les checkboxes de "subtype" qui correspondent aux sous-types du parent
+            const subtypeCheckboxes = document.querySelectorAll(
+                `#detailContent .parameter-control[data-param="subtype"]`
+            );
+
+            subtypeCheckboxes.forEach(cb => {
+                if (subtypesToToggle.includes(cb.value)) {
+                    cb.checked = isChecked;
+                }
+            });
+
+            // Synchroniser le filtre "subtype" dans le cache
+            // On appelle updateLayerParameter avec une checkbox de subtype pour déclencher la mise à jour globale de la liste
+            const firstSubtypeCb = Array.from(subtypeCheckboxes).find(cb => subtypesToToggle.includes(cb.value));
+            if (firstSubtypeCb) {
+                this.updateLayerParameter(layerId, firstSubtypeCb);
+            }
+        }
+        // Si on change un "subtype" (enfant)
+        else if (paramName === 'subtype') {
+            const subtypeValue = control.value;
+            let parentType = null;
+
+            // Trouver le parent pour ce subtype
+            for (const [type, subtypes] of Object.entries(layer.hierarchy)) {
+                if (subtypes.includes(subtypeValue)) {
+                    parentType = type;
+                    break;
+                }
+            }
+
+            if (parentType) {
+                const parentCheckbox = document.querySelector(
+                    `#detailContent .parameter-control[data-param="type"][value="${parentType}"]`
+                );
+
+                if (parentCheckbox) {
+                    if (!control.checked) {
+                        // Si on décoche un enfant, on décoche le parent
+                        parentCheckbox.checked = false;
+                    } else {
+                        // Si on coche un enfant, on vérifie si tous les enfants du même parent sont cochés
+                        const subtypesOfParent = layer.hierarchy[parentType];
+                        const allCheckboxesOfSubtypes = Array.from(document.querySelectorAll(
+                            `#detailContent .parameter-control[data-param="subtype"]`
+                        )).filter(cb => subtypesOfParent.includes(cb.value));
+
+                        const allChecked = allCheckboxesOfSubtypes.every(cb => cb.checked);
+                        if (allChecked) {
+                            parentCheckbox.checked = true;
+                        }
+                    }
+                    // Mettre à jour le cache du parent "type"
+                    this.updateLayerParameter(layerId, parentCheckbox);
+                }
+            }
+        }
+    }
+
     updateLayerParameter(layerId, control) {
         const paramName = control.dataset.param;
+        const layer = this.layers[layerId];
         let value;
-        
-        if (control.type === 'checkbox') {
+
+        // Déterminer le type de paramètre depuis la config
+        const paramConfig = [...(layer.parameters || []), ...(layer.filters || [])]
+            .find(p => p.name === paramName);
+
+        // Vérifier si c'est un multiselect (soit via paramConfig, soit si c'est un subtype dans une hiérarchie)
+        const isMultiselect = (paramConfig && paramConfig.type === 'multiselect') ||
+            (paramName === 'subtype' && layer.hierarchy);
+
+        if (isMultiselect) {
+            // Pour multiselect, on récupère toutes les valeurs cochées
+            const checkedControls = document.querySelectorAll(
+                `#detailContent .parameter-control[data-param="${paramName}"]:checked`
+            );
+            value = Array.from(checkedControls).map(c => c.value);
+
+            // Si c'est le filtre "type" et qu'il y a une hiérarchie,
+            // on doit s'assurer d'inclure les types dont des sous-types sont cochés
+            if (paramName === 'type' && layer.hierarchy) {
+                const checkedSubtypes = document.querySelectorAll(
+                    `#detailContent .parameter-control[data-param="subtype"]:checked`
+                );
+
+                checkedSubtypes.forEach(cb => {
+                    const stVal = cb.value;
+                    for (const [parent, children] of Object.entries(layer.hierarchy)) {
+                        if (children.includes(stVal)) {
+                            if (!value.includes(parent)) {
+                                value.push(parent);
+                            }
+                            break;
+                        }
+                    }
+                });
+            }
+        } else if (control.type === 'checkbox') {
             value = control.checked;
         } else if (control.type === 'range') {
             value = parseFloat(control.value);
         } else {
             value = control.value;
         }
-        
-        this.layers[layerId].config[paramName] = value;
-        
-        const layer = this.layers[layerId];
+
+        if (layer.config) {
+            layer.config[paramName] = value;
+        }
+
         if (layer.filters) {
             const filter = layer.filters.find(f => f.name === paramName);
             if (filter) {
@@ -610,7 +898,7 @@ class MapController {
                 this.clearLayerCache(layerId, true);
             }
         }
-        
+
         if (layerId === 'background') {
             if (paramName === 'variant') {
                 this.changeBaseTiles(value);
@@ -621,74 +909,74 @@ class MapController {
             }
         }
     }
-    
+
     changeBaseTiles(variant) {
         if (this.baseTileLayer) {
             this.map.removeLayer(this.baseTileLayer);
         }
-        
+
         const config = TILE_CONFIGS[variant] || TILE_CONFIGS['Plan'];
-        
+
         this.baseTileLayer = L.tileLayer(config.url, {
             attribution: config.attribution,
             maxZoom: config.maxZoom,
             subdomains: config.subdomains || 'abc'
         }).addTo(this.map);
     }
-    
+
     setupEventListeners() {
         const searchButton = document.getElementById('searchButton');
         const searchInput = document.getElementById('searchInput');
-        
+
         searchButton.addEventListener('click', () => this.performSearch());
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.performSearch();
         });
-        
+
         let searchTimeout = null;
         searchInput.addEventListener('input', (e) => {
             const query = e.target.value.trim();
             if (searchTimeout) clearTimeout(searchTimeout);
-            
+
             if (query.length < 3) {
                 this.hideSuggestions();
                 return;
             }
-            
+
             searchTimeout = setTimeout(() => this.fetchSuggestions(query), 300);
         });
-        
+
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.search-section')) {
                 this.hideSuggestions();
             }
         });
-        
+
         document.getElementById('closeDetail').addEventListener('click', () => {
             document.getElementById('detailMenu').classList.add('hidden');
             this.currentDetailLayer = null;
         });
-        
+
         document.getElementById('resetView').addEventListener('click', () => {
             this.map.setView(this.config.defaultCenter, this.config.defaultZoom);
         });
-        
+
         document.getElementById('toggleFullscreen').addEventListener('click', () => {
             this.toggleFullscreen();
         });
     }
-    
+
     async fetchSuggestions(query) {
         try {
             await new Promise(resolve => setTimeout(resolve, 300));
-            
+
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
             const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
-            
+
             if (!response.ok) return;
-            
+
             const data = await response.json();
-            
+
             if (data && data.length > 0) {
                 this.displaySuggestions(data);
             } else {
@@ -698,11 +986,11 @@ class MapController {
             // Erreur silencieuse
         }
     }
-    
+
     displaySuggestions(suggestions) {
         const searchResults = document.getElementById('searchResults');
         searchResults.innerHTML = '';
-        
+
         suggestions.forEach(suggestion => {
             const item = document.createElement('div');
             item.className = 'suggestion-item';
@@ -713,79 +1001,79 @@ class MapController {
                     <div class="suggestion-type">${formatSuggestionType(suggestion.type)}</div>
                 </div>
             `;
-            
+
             item.addEventListener('click', () => this.selectSuggestion(suggestion));
             searchResults.appendChild(item);
         });
-        
+
         searchResults.classList.remove('hidden');
     }
-    
+
     hideSuggestions() {
         const searchResults = document.getElementById('searchResults');
         searchResults.classList.add('hidden');
         searchResults.innerHTML = '';
     }
-    
+
     selectSuggestion(suggestion) {
         const searchInput = document.getElementById('searchInput');
         searchInput.value = suggestion.display_name;
-        
+
         const lat = parseFloat(suggestion.lat);
         const lng = parseFloat(suggestion.lon);
-        
+
         this.map.setView([lat, lng], 15);
-        
+
         if (this.searchMarker) {
             this.map.removeLayer(this.searchMarker);
         }
-        
+
         this.searchMarker = L.marker([lat, lng])
             .addTo(this.map)
             .bindPopup(`<strong>${suggestion.display_name}</strong>`)
             .openPopup();
-        
+
         this.hideSuggestions();
     }
-    
+
     async performSearch() {
         const searchInput = document.getElementById('searchInput');
         const query = searchInput.value.trim();
-        
+
         if (!query) return;
-        
+
         const searchResults = document.getElementById('searchResults');
         searchResults.innerHTML = '<div class="loading">Recherche en cours...</div>';
         searchResults.classList.remove('hidden');
-        
+
         try {
             await new Promise(resolve => setTimeout(resolve, 1000));
-            
+
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
             const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
-            
+
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            
+
             const data = await response.json();
-            
+
             if (data && data.length > 0) {
                 const result = data[0];
                 const lat = parseFloat(result.lat);
                 const lng = parseFloat(result.lon);
-                
+
                 if (isNaN(lat) || isNaN(lng)) throw new Error('Coordonnées invalides');
-                
+
                 this.map.setView([lat, lng], 13);
-                
+
                 if (this.searchMarker) {
                     this.map.removeLayer(this.searchMarker);
                 }
-                
+
                 this.searchMarker = L.marker([lat, lng])
                     .addTo(this.map)
                     .bindPopup(`<strong>${result.display_name}</strong>`)
                     .openPopup();
-                
+
                 searchResults.innerHTML = `<div class="success">📍 ${result.display_name}</div>`;
                 setTimeout(() => searchResults.classList.add('hidden'), 3000);
             } else {
@@ -797,7 +1085,7 @@ class MapController {
             setTimeout(() => searchResults.classList.add('hidden'), 3000);
         }
     }
-    
+
     toggleFullscreen() {
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen();
@@ -805,7 +1093,7 @@ class MapController {
             document.exitFullscreen();
         }
     }
-    
+
     showError(message) {
         const layersList = document.getElementById('layersList');
         layersList.innerHTML = `<div class="error">${message}</div>`;

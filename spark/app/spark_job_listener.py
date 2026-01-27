@@ -27,6 +27,7 @@ SPARK_APPS_PATH = '/opt/spark/apps'
 AVAILABLE_SCRIPTS = {
     'map_data_process.py': os.path.join(SPARK_APPS_PATH, 'map_data_process.py'),
     'upper.py': os.path.join(SPARK_APPS_PATH, 'upper.py'),
+    'data_converter.py': os.path.join(SPARK_APPS_PATH, 'data_converter.py'),
 }
 
 

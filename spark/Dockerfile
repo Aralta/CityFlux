@@ -3,21 +3,22 @@ FROM python:3.11-slim-bookworm
 # Installation des dépendances système
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      curl \
-      procps \
-      rsync \
-      openssh-client \
-      default-jdk-headless \
-      build-essential \
-      cmake \
-      pkg-config \
-      libblas-dev \
-      liblapack-dev \
-      libigraph-dev \
-      libxml2-dev \
-      zlib1g-dev \
-      gfortran \
-      git && \
+    curl \
+    procps \
+    rsync \
+    openssh-client \
+    default-jdk-headless \
+    libgeos-dev \
+    build-essential \
+    cmake \
+    pkg-config \
+    libblas-dev \
+    liblapack-dev \
+    libigraph-dev \
+    libxml2-dev \
+    zlib1g-dev \
+    gfortran \
+    git && \
     rm -rf /var/lib/apt/lists/*
 
 # Configuration Java et Spark

@@ -49,6 +49,27 @@ LAYERS_CONFIG = {
         ],
         'info': {'source': 'Base de données PostGIS', 'description': 'Lignes de transport en commun'}
     },
+    'traces': {
+        'name': 'Traces GNSS',
+        'enabled': False,
+        'type': 'geojson',
+        'description': 'Trajectoires utilisateurs',
+        'icon': '👣',
+        'config': {
+            'color': '#FF0000',
+            'opacity': 0.8,
+            'weight': 4
+        },
+        'parameters': [
+            {'name': 'color', 'label': 'Couleur', 'type': 'color', 'value': '#FF0000'},
+            {'name': 'opacity', 'label': 'Opacité', 'type': 'range', 'min': 0, 'max': 1, 'step': 0.1, 'value': 0.8},
+            {'name': 'weight', 'label': 'Épaisseur', 'type': 'range', 'min': 1, 'max': 10, 'step': 1, 'value': 4}
+        ],
+        'filters': [
+            {'name': 'trajectory_id', 'label': 'Sélectionner des traces', 'type': 'multiselect', 'options': [], 'value': [], 'dynamic': 'trajectory_ids'}
+        ],
+        'info': {'source': 'PostGIS (trajectory_gnss)', 'description': 'Traces GPS brutes des utilisateurs'}
+    },
     'poi': {
         'name': 'POI',
         'enabled': True,
@@ -64,8 +85,8 @@ LAYERS_CONFIG = {
             {'name': 'iconSize', 'label': 'Taille des icônes', 'type': 'range', 'min': 15, 'max': 50, 'step': 5, 'value': 25}
         ],
         'filters': [
-            {'name': 'type', 'label': 'Catégorie', 'type': 'select', 'options': ['Tous'], 'value': 'Tous', 'dynamic': 'poi_types'},
-            {'name': 'subtype', 'label': 'Sous-catégorie', 'type': 'select', 'options': ['Tous'], 'value': 'Tous', 'dynamic': 'poi_subtypes'}
+            {'name': 'type', 'label': 'Catégories', 'type': 'multiselect', 'options': [], 'value': [], 'dynamic': 'poi_types'},
+            {'name': 'subtype', 'label': 'Sous-catégories', 'type': 'multiselect', 'options': [], 'value': [], 'dynamic': 'poi_subtypes', 'parent': 'type'}
         ],
         'info': {'source': 'Base de données PostGIS', 'description': 'Points d\'intérêt'}
     },
@@ -88,8 +109,8 @@ LAYERS_CONFIG = {
             {'name': 'weight', 'label': 'Épaisseur du contour', 'type': 'range', 'min': 1, 'max': 5, 'step': 1, 'value': 2}
         ],
         'filters': [
-            {'name': 'type', 'label': 'Catégorie', 'type': 'select', 'options': ['Toutes'], 'value': 'Toutes', 'dynamic': 'zone_types'},
-            {'name': 'subtype', 'label': 'Sous-catégorie', 'type': 'select', 'options': ['Toutes'], 'value': 'Toutes', 'dynamic': 'zone_subtypes'}
+            {'name': 'type', 'label': 'Catégories', 'type': 'multiselect', 'options': [], 'value': [], 'dynamic': 'zone_types'},
+            {'name': 'subtype', 'label': 'Sous-catégories', 'type': 'multiselect', 'options': [], 'value': [], 'dynamic': 'zone_subtypes', 'parent': 'type'}
         ],
         'info': {'source': 'Base de données PostGIS', 'description': 'Zones géographiques'}
     },
@@ -116,26 +137,34 @@ LAYERS_CONFIG = {
 LAYER_DATA_HANDLERS = {
     'arrets': lambda bbox, request: db_manager.get_arrets(bbox, request.GET.get('type')),
     'lignes': lambda bbox, request: db_manager.get_lignes(bbox, request.GET.get('type')),
+    'traces': lambda bbox, request: db_manager.get_trajectories_gnss(
+        bbox, 
+        int(request.GET.get('zoom', 14)),
+        trajectory_ids=request.GET.getlist('trajectory_id')
+    ),
     'poi': lambda bbox, request: db_manager.get_poi(
         bbox, 
-        request.GET.get('type'), 
-        request.GET.get('subtype'),
+        request.GET.getlist('type'), 
+        request.GET.getlist('subtype'),
         int(request.GET.get('zoom', 14))
     ),
     'zones': lambda bbox, request: db_manager.get_zones(
         bbox,
-        request.GET.get('type'),
-        request.GET.get('subtype'),
+        request.GET.getlist('type'),
+        request.GET.getlist('subtype'),
         int(request.GET.get('zoom', 14))
     )
 }
 
 # Mapping des fonctions pour charger les options dynamiques des filtres
 DYNAMIC_FILTER_LOADERS = {
-    'poi_types': lambda: ['Tous'] + db_manager.get_poi_types(),
-    'poi_subtypes': lambda: ['Tous'] + db_manager.get_poi_subtypes(),
-    'zone_types': lambda: ['Toutes'] + db_manager.get_zone_types(),
-    'zone_subtypes': lambda: ['Toutes'] + db_manager.get_zone_subtypes()
+    'poi_types': lambda: db_manager.get_poi_types(),
+    'poi_subtypes': lambda: db_manager.get_poi_subtypes(),
+    'zone_types': lambda: db_manager.get_zone_types(),
+    'zone_subtypes': lambda: db_manager.get_zone_subtypes(),
+    'trajectory_ids': lambda: db_manager.get_trajectory_ids(),
+    'poi_hierarchy': lambda: db_manager.get_poi_structure(),
+    'zone_hierarchy': lambda: db_manager.get_zone_structure()
 }
 
 
@@ -288,5 +317,6 @@ def api_layer_config(request, layer_id):
         'icon': config['icon'],
         'parameters': config.get('parameters', []),
         'filters': config.get('filters', []),
-        'info': config.get('info', {})
+        'info': config.get('info', {}),
+        'hierarchy': DYNAMIC_FILTER_LOADERS[f"{layer_id}_hierarchy"]() if f"{layer_id}_hierarchy" in DYNAMIC_FILTER_LOADERS else None
     })

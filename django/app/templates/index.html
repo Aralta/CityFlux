@@ -1,37 +1,39 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MobiFlux - Mobilité Urbaine</title>
     <link rel="stylesheet" href="/static/css/common.css">
 </head>
+
 <body>
     <div class="container">
         <header class="header">
             <h1>🗺️ MobiFlux</h1>
             <p class="subtitle">Plateforme de Mobilité Urbaine</p>
         </header>
-        
+
         <main class="main-content">
             <section class="welcome-section">
                 <h2>Bienvenue</h2>
                 <p>Accédez aux différents outils de la plateforme MobiFlux.</p>
             </section>
-            
+
             <div class="cards-grid">
                 <a href="/carte/" class="card">
                     <div class="card-icon">🗺️</div>
                     <h3>Carte Interactive</h3>
                     <p>Visualisez les données de mobilité sur une carte interactive</p>
                 </a>
-                
+
                 <a href="/db-console/" class="card">
                     <div class="card-icon">💾</div>
                     <h3>Console Base de Données</h3>
                     <p>Exécutez des requêtes SQL sur la base de données</p>
                 </a>
-                
+
                 <a href="/spark-upper/" class="card">
                     <div class="card-icon">⚡</div>
                     <h3>Jobs Spark</h3>
@@ -49,12 +51,24 @@
                     <h3>Multi-Console</h3>
                     <p>Visualisez les logs de tous les services en temps réel</p>
                 </a>
+                <a href="/conversion/" class="card">
+                    <div class="card-icon">🔄</div>
+                    <h3>Pipeline Conversion</h3>
+                    <p>Convertissez et chargez vos fichiers de données (GNSS, Telecom, OD)</p>
+                </a>
+
+                <a href="/compute/" class="card">
+                    <div class="card-icon">🧮</div>
+                    <h3>Scripts d'Analyse</h3>
+                    <p>Lancez des scripts d'analyse (transport mode, zones, POIs)</p>
+                </a>
             </div>
         </main>
-        
+
         <footer class="footer">
             <p>&copy; 2025 - 2026 MobiFlux - Mobilité Urbaine</p>
         </footer>
     </div>
 </body>
+
 </html>

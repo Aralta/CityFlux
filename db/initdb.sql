@@ -67,3 +67,16 @@ CREATE INDEX idx_zone_geom ON zone USING GIST(geom);
 INSERT INTO type_transport (nom) VALUES 
 ('Bus'), ('Tram'), ('Métro'), ('Train'), ('Vélo'), ('Marche'), ('Voiture')
 ON CONFLICT (nom) DO NOTHING;
+
+-- Table des traces GNSS (positions GPS)
+CREATE TABLE trajectory_gnss (
+    id SERIAL PRIMARY KEY,
+    trajectory_id TEXT,
+    user_id TEXT,
+    timestamp TIMESTAMP,
+    speed FLOAT,
+    geom GEOMETRY(Point, 4326)
+);
+
+CREATE INDEX idx_trajectory_gnss_geom ON trajectory_gnss USING GIST(geom);
+CREATE INDEX idx_trajectory_gnss_traj_id ON trajectory_gnss(trajectory_id);

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guide - Créer un Module - MobiFlux</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .wiki-content {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .wiki-content h2 {
+            color: var(--primary-color);
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .wiki-content h3 {
+            color: var(--text-dark);
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .wiki-content p,
+        .wiki-content li {
+            line-height: 1.8;
+            color: var(--text-gray);
+        }
+
+        .wiki-content ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        .wiki-content li {
+            margin-bottom: 8px;
+        }
+
+        .wiki-content code {
+            background-color: var(--bg-light);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+
+        .wiki-content pre {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: var(--radius);
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+
+        .wiki-content pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+
+        .alert-box {
+            background-color: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: var(--radius);
+            padding: 20px;
+            margin: 30px 0;
+        }
+
+        .alert-box h4 {
+            color: #d97706;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alert-box p {
+            color: #92400e;
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <a href="/compute/" class="back-link">← Retour aux Scripts d'Analyse</a>
+
+        <header class="header">
+            <h1>📚 Guide : Créer un Module</h1>
+            <p class="subtitle">Documentation pour ajouter un nouveau script d'analyse à la plateforme</p>
+        </header>
+
+        <main class="main-content">
+            <div class="wiki-content">
+
+                <div class="alert-box">
+                    <h4>⚠️ Important</h4>
+                    <p>Pour créer un nouveau module, veuillez vous rapprocher de votre <strong>administrateur
+                            système</strong> qui pourra vous accompagner dans le déploiement.</p>
+                </div>
+
+                <h2>🏗️ Architecture</h2>
+                <p>Les modules d'analyse de MobiFlux utilisent l'architecture suivante :</p>
+                <ul>
+                    <li><strong>Apache Spark</strong> - Traitement distribué des données</li>
+                    <li><strong>Celery</strong> - Gestion des tâches asynchrones</li>
+                    <li><strong>Redis</strong> - Broker de messages et cache</li>
+                    <li><strong>PostgreSQL</strong> - Stockage des données</li>
+                </ul>
+
+                <h2>📁 Structure des Fichiers</h2>
+                <p>Un nouveau module nécessite les fichiers suivants :</p>
+
+                <h3>1. Script Spark</h3>
+                <p>Créer un fichier dans <code>spark/app/</code></p>
+                <pre><code># spark/app/mon_module.py
+from pyspark.sql import SparkSession
+
+def run_analysis(config):
+    spark = SparkSession.builder \
+        .appName("MonModule") \
+        .getOrCreate()
+    
+    # Votre logique d'analyse ici
+    
+    spark.stop()
+</code></pre>
+
+                <h3>2. Tâche Celery</h3>
+                <p>Ajouter la tâche dans <code>django/app/tasks.py</code></p>
+                <pre><code># tasks.py
+from celery_app import app
+
+@app.task
+def run_mon_module(params):
+    # Soumettre le job Spark
+    pass
+</code></pre>
+
+                <h3>3. Vue Django</h3>
+                <p>Créer la vue dans <code>django/app/views/</code></p>
+                <pre><code># views/mon_module.py
+from django.shortcuts import render
+from django.http import JsonResponse
+
+def mon_module_view(request):
+    return render(request, 'mon_module.html')
+</code></pre>
+
+                <h2>🔧 Configuration</h2>
+                <p>Pour intégrer votre module :</p>
+                <ul>
+                    <li>Ajouter la route dans <code>app.py</code></li>
+                    <li>Créer le template HTML correspondant</li>
+                    <li>Ajouter la carte dans <code>compute.html</code></li>
+                    <li>Configurer les paramètres Spark si nécessaire</li>
+                </ul>
+
+                <h2>📞 Contact</h2>
+                <p>Pour toute question ou assistance dans la création de votre module, contactez votre administrateur
+                    système qui pourra :</p>
+                <ul>
+                    <li>Configurer les ressources Spark nécessaires</li>
+                    <li>Déployer le module en production</li>
+                    <li>Gérer les permissions d'accès</li>
+                    <li>Monitorer les performances</li>
+                </ul>
+
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2025 - 2026 MobiFlux - Mobilité Urbaine</p>
+        </footer>
+    </div>
+</body>
+
+</html>

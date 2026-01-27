@@ -128,3 +128,17 @@ def spark_upper(request):
 def render_enhanced_data(request):
     """Rendu de la page des données enrichies"""
     return render(request, 'enhanced_data.html')
+
+def conversion_view(request):
+    """Page de l'outil de conversion de données"""
+    return render(request, 'conversion.html')
+
+
+def compute_view(request):
+    """Page des scripts d'analyse"""
+    return render(request, 'compute.html')
+
+
+def compute_wiki_view(request):
+    """Page wiki pour créer un nouveau module"""
+    return render(request, 'compute_wiki.html')

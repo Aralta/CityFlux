@@ -110,7 +110,8 @@ class DatabaseManager:
                 continue
             
             properties = dict(row)
-            properties['feature_type'] = feature_type
+            if 'feature_type' not in properties:
+                properties['feature_type'] = feature_type
             
             features.append({
                 'type': 'Feature',
@@ -126,9 +127,18 @@ class DatabaseManager:
         params = []
         
         for field, value in conditions.items():
-            if value and value not in ['Tous', 'Toutes']:
-                filters.append(f"{field} = %s")
-                params.append(value)
+            if value is not None:
+                if isinstance(value, list):
+                    if value and 'Tous' not in value and 'Toutes' not in value:
+                        placeholders = ', '.join(['%s'] * len(value))
+                        filters.append(f"{field} IN ({placeholders})")
+                        params.extend(value)
+                    elif not value:
+                        # Si une liste vide est fournie, on ne veut rien retourner
+                        filters.append("1=0") 
+                elif value not in ['Tous', 'Toutes']:
+                    filters.append(f"{field} = %s")
+                    params.append(value)
         
         filter_str = " AND " + " AND ".join(filters) if filters else ""
         return filter_str, params
@@ -149,16 +159,43 @@ class DatabaseManager:
     # TRAJECTOIRES GNSS
     # ========================================================================
     
-    def get_trajectories_gnss(self, bbox: Tuple, zoom: int, limit: int = 1000) -> Dict:
-        """Récupérer les trajectoires GNSS dans la zone visible."""
-        query = f"""
-        SELECT trajectory_id, user_id, timestamp, speed,
-               ST_AsGeoJSON({self._simplify_expr(zoom)})::json AS geometry
+    def get_trajectories_gnss(self, bbox: Tuple, zoom: int, limit: int = 100, 
+                             trajectory_ids: List[str] = None) -> Dict:
+        """Récupérer les trajectoires GNSS (lignes et points) avec filtrage optionnel."""
+        limit_lines = limit
+        limit_points = limit * 5
+        
+        # Filtres supplémentaires
+        extra_filter = ""
+        extra_params = []
+        if trajectory_ids:
+            placeholders = ', '.join(['%s'] * len(trajectory_ids))
+            extra_filter = f" AND trajectory_id IN ({placeholders})"
+            extra_params = trajectory_ids
+
+        # 1. Trajectoires (Lignes)
+        query_lines = f"""
+        SELECT trajectory_id, user_id, AVG(speed) as speed, 'trajectory' as feature_type,
+               ST_AsGeoJSON(ST_MakeLine(geom ORDER BY timestamp))::json AS geometry
         FROM trajectory_gnss
-        WHERE {self._bbox_filter(bbox)}
-        ORDER BY timestamp DESC LIMIT %s
+        WHERE {self._bbox_filter(bbox)} {extra_filter}
+        GROUP BY trajectory_id, user_id
+        HAVING COUNT(*) > 1
+        LIMIT %s
         """
-        return self._to_geojson(self.execute_query(query, (limit,)), 'trajectory')
+        lines = self.execute_query(query_lines, tuple(extra_params + [limit_lines])) or []
+        
+        # 2. Points individuels (même si cachés en JS, on les garde en API si besoin)
+        query_points = f"""
+        SELECT trajectory_id, user_id, speed, timestamp, 'point' as feature_type,
+               ST_AsGeoJSON(geom)::json AS geometry
+        FROM trajectory_gnss
+        WHERE {self._bbox_filter(bbox)} {extra_filter}
+        LIMIT %s
+        """
+        points = self.execute_query(query_points, tuple(extra_params + [limit_points])) or []
+        
+        return self._to_geojson(lines + points, 'mixed')
     
     def get_trajectories_gnss_aggregated(self, bbox: Tuple, zoom: int, grid_size: float = 0.01) -> Dict:
         """Récupérer les trajectoires GNSS agrégées par grille."""
@@ -255,10 +292,10 @@ class DatabaseManager:
     # POINTS D'INTÉRÊT
     # ========================================================================
     
-    def get_poi(self, bbox: Tuple, poi_type: str = None, 
-                poi_subtype: str = None, zoom: int = 14, limit: int = 1000) -> Dict:
+    def get_poi(self, bbox: Tuple, poi_types: List[str] = None, 
+                poi_subtypes: List[str] = None, zoom: int = 14, limit: int = 1000) -> Dict:
         """Récupérer les points d'intérêt dans la zone."""
-        type_filter, params = self._build_filters({'type': poi_type, 'subtype': poi_subtype})
+        type_filter, params = self._build_filters({'type': poi_types, 'subtype': poi_subtypes})
         adaptive_limit = self._adaptive_limit(zoom, limit)
         params.append(adaptive_limit)
         
@@ -275,10 +312,10 @@ class DatabaseManager:
     # ZONES
     # ========================================================================
     
-    def get_zones(self, bbox: Tuple, zone_type: str = None,
-                  zone_subtype: str = None, zoom: int = 14, limit: int = 200) -> Dict:
+    def get_zones(self, bbox: Tuple, zone_types: List[str] = None,
+                  zone_subtypes: List[str] = None, zoom: int = 14, limit: int = 200) -> Dict:
         """Récupérer les zones géographiques avec simplification adaptative."""
-        type_filter, params = self._build_filters({'type': zone_type, 'subtype': zone_subtype})
+        type_filter, params = self._build_filters({'type': zone_types, 'subtype': zone_subtypes})
         params.append(limit)
         
         geom_expr = self._simplify_expr(zoom, preserve=True)
@@ -307,6 +344,34 @@ class DatabaseManager:
     
     def get_zone_subtypes(self, zone_type: str = None) -> List[str]:
         return self._get_distinct_values('zone', 'subtype', 'type', zone_type)
+
+    def get_trajectory_ids(self) -> List[str]:
+        """Récupérer tous les identifiants de trajectoires disponibles."""
+        return self._get_distinct_values('trajectory_gnss', 'trajectory_id')
+
+    def get_poi_structure(self) -> Dict[str, List[str]]:
+        """Récupérer la hiérarchie type -> subtypes pour les POI."""
+        query = "SELECT DISTINCT type, subtype FROM poi WHERE type IS NOT NULL AND subtype IS NOT NULL ORDER BY type, subtype"
+        results = self.execute_query(query)
+        structure = {}
+        if results:
+            for row in results:
+                t, st = row['type'], row['subtype']
+                if t not in structure: structure[t] = []
+                structure[t].append(st)
+        return structure
+
+    def get_zone_structure(self) -> Dict[str, List[str]]:
+        """Récupérer la hiérarchie type -> subtypes pour les zones."""
+        query = "SELECT DISTINCT type, subtype FROM zone WHERE type IS NOT NULL AND subtype IS NOT NULL ORDER BY type, subtype"
+        results = self.execute_query(query)
+        structure = {}
+        if results:
+            for row in results:
+                t, st = row['type'], row['subtype']
+                if t not in structure: structure[t] = []
+                structure[t].append(st)
+        return structure
     
     # ========================================================================
     # STATISTIQUES

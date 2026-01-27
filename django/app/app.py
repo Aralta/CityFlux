@@ -66,9 +66,10 @@ django.setup()
 from celery_app import app as celery_app
 
 from views.carte import carte_view, api_search, api_layers_list, api_layer_data, api_layer_config
-from views.handler import database_console, index, health_check, spark_upper , render_enhanced_data
+from views.handler import database_console, index, health_check, spark_upper , render_enhanced_data, conversion_view, compute_view, compute_wiki_view
 from views.get_enhanced_data import GetEnchancedData
 from views.docker_console import multi_console_view, get_docker_logs, get_all_containers_status
+from views.conversion_api import trigger_conversion_job
 
 
 urlpatterns = [
@@ -79,6 +80,9 @@ urlpatterns = [
     path('spark-upper/', spark_upper, name='spark_upper'),
     path('enhanced-data/', render_enhanced_data, name='enhanced_data'),
     path('multi-console/', multi_console_view, name='multi_console'),
+    path('conversion/', conversion_view, name='conversion_page'),
+    path('compute/', compute_view, name='compute'),
+    path('compute/wiki/', compute_wiki_view, name='compute_wiki'),
     
     # API
     path('health/', health_check, name='health_check'),
@@ -89,6 +93,7 @@ urlpatterns = [
     path('api/enhanced-data/', GetEnchancedData, name='api_enhanced_data'),
     path('api/docker-logs/<str:service_id>/', get_docker_logs, name='api_docker_logs'),
     path('api/docker-status/', get_all_containers_status, name='api_docker_status'),
+    path('api/conversion/trigger/', trigger_conversion_job, name='api_trigger_conversion'),
 ]
 
 

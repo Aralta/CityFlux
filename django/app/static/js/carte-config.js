@@ -53,7 +53,7 @@ const POI_ICONS = {
         'hotel': '🏨',
         'logement': '🏠'
     },
-    
+
     subtypes: {
         // Alimentation
         'boulangerie': '🥖',
@@ -76,7 +76,7 @@ const POI_ICONS = {
         'cheese': '🧀',
         'caviste': '🍷',
         'wine': '🍷',
-        
+
         // Restauration
         'café': '☕',
         'cafe': '☕',
@@ -89,7 +89,7 @@ const POI_ICONS = {
         'pizzeria': '🍕',
         'glacier': '🍦',
         'ice_cream': '🍦',
-        
+
         // Santé
         'pharmacie': '💊',
         'pharmacy': '💊',
@@ -108,7 +108,7 @@ const POI_ICONS = {
         'veterinary': '🐾',
         'optique': '👓',
         'opticien': '👓',
-        
+
         // Éducation
         'maternelle': '👶',
         'kindergarten': '👶',
@@ -119,7 +119,7 @@ const POI_ICONS = {
         'bibliothèque': '📖',
         'bibliotheque': '📖',
         'library': '📖',
-        
+
         // Services
         'banque': '🏦',
         'bank': '🏦',
@@ -131,7 +131,7 @@ const POI_ICONS = {
         'fire_station': '🚒',
         'mairie': '🏛️',
         'town_hall': '🏛️',
-        
+
         // Sport
         'piscine': '🏊',
         'swimming_pool': '🏊',
@@ -143,7 +143,7 @@ const POI_ICONS = {
         'tennis': '🎾',
         'football': '⚽',
         'basketball': '🏀',
-        
+
         // Loisirs/Culture
         'cinéma': '🎬',
         'cinema': '🎬',
@@ -154,7 +154,7 @@ const POI_ICONS = {
         'museum': '🏛️',
         'galerie': '🖼️',
         'gallery': '🖼️',
-        
+
         // Transport
         'gare': '🚉',
         'station': '🚉',
@@ -168,13 +168,13 @@ const POI_ICONS = {
         'vélo': '🚲',
         'velo': '🚲',
         'bike': '🚲',
-        
+
         // Hébergement
         'camping': '⛺',
         'gîte': '🏡',
         'gite': '🏡',
         'chambre_hote': '🛏️',
-        
+
         // Religion
         'église': '⛪',
         'eglise': '⛪',
@@ -184,7 +184,7 @@ const POI_ICONS = {
         'mosque': '🕌',
         'synagogue': '🕍',
         'temple': '🛕',
-        
+
         // Autres commerces
         'coiffeur': '💇',
         'hairdresser': '💇',
@@ -198,7 +198,7 @@ const POI_ICONS = {
         'fuel': '⛽',
         'essence': '⛽'
     },
-    
+
     default: '📍'
 };
 
@@ -249,51 +249,51 @@ const ZONE_COLORS = {
         'suburban': { fill: '#78909c', stroke: '#546e7a' },
         'rural': { fill: '#a5d6a7', stroke: '#81c784' }
     },
-    
+
     subtypes: {
         // Résidentiel
         'habitat_collectif': { fill: '#5dade2', stroke: '#3498db' },
         'habitat_individuel': { fill: '#85c1e9', stroke: '#5dade2' },
         'lotissement': { fill: '#aed6f1', stroke: '#85c1e9' },
-        
+
         // Commercial
         'centre_commercial': { fill: '#ec7063', stroke: '#e74c3c' },
         'zone_commerciale': { fill: '#f1948a', stroke: '#ec7063' },
         'marché': { fill: '#f5b7b1', stroke: '#f1948a' },
-        
+
         // Industriel
         'usine': { fill: '#5d6d7e', stroke: '#4d5656' },
         'entrepôt': { fill: '#7f8c8d', stroke: '#5d6d7e' },
         'zone_artisanale': { fill: '#95a5a6', stroke: '#7f8c8d' },
-        
+
         // Nature
         'jardin_public': { fill: '#58d68d', stroke: '#2ecc71' },
         'espace_vert': { fill: '#82e0aa', stroke: '#58d68d' },
         'bois': { fill: '#229954', stroke: '#1e8449' },
         'prairie': { fill: '#abebc6', stroke: '#82e0aa' },
-        
+
         // Sport
         'stade': { fill: '#f5b041', stroke: '#f39c12' },
         'terrain_sport': { fill: '#f8c471', stroke: '#f5b041' },
         'piscine': { fill: '#5dade2', stroke: '#3498db' },
         'gymnase': { fill: '#fad7a0', stroke: '#f8c471' },
-        
+
         // Transport
         'gare': { fill: '#17a2b8', stroke: '#138496' },
         'parking': { fill: '#6c757d', stroke: '#5a6268' },
         'aéroport': { fill: '#20c997', stroke: '#1a9c7a' },
-        
+
         // Eau
         'lac': { fill: '#64b5f6', stroke: '#42a5f5' },
         'rivière': { fill: '#90caf9', stroke: '#64b5f6' },
         'étang': { fill: '#bbdefb', stroke: '#90caf9' },
-        
+
         // Quartiers
         'centre_ville': { fill: '#ff7043', stroke: '#f4511e' },
         'quartier': { fill: '#ffab91', stroke: '#ff7043' },
         'village': { fill: '#d7ccc8', stroke: '#bcaaa4' }
     },
-    
+
     default: { fill: '#9b59b6', stroke: '#8e44ad' }
 };
 
@@ -353,7 +353,9 @@ const POPUP_LABELS = {
     description: 'Description',
     type_transport: 'Transport',
     nb_lignes: 'Lignes desservies',
-    capacity: 'Capacité'
+    capacity: 'Capacité',
+    speed: 'Vitesse (km/h)',
+    timestamp: 'Heure'
 };
 
 /**
