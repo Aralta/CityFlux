@@ -13,7 +13,7 @@ class EnhancedDataExtractor {
         this.lastResult = null;
         this.init();
     }
-    
+
     /**
      * Initialisation
      */
@@ -21,20 +21,20 @@ class EnhancedDataExtractor {
         this.initMap();
         this.setupEventListeners();
     }
-    
+
     /**
      * Initialisation de la carte Leaflet
      */
     initMap() {
         // Centrer sur la France par défaut
         this.map = L.map('map').setView([46.603354, 1.888334], 6);
-        
+
         // Ajouter les tuiles OpenStreetMap
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '© OpenStreetMap contributors'
         }).addTo(this.map);
-        
+
         // Désactiver le clic sur la carte par défaut
         this.map.on('click', (e) => {
             if (this.drawingMode) {
@@ -42,7 +42,7 @@ class EnhancedDataExtractor {
             }
         });
     }
-    
+
     /**
      * Configuration des événements
      */
@@ -51,38 +51,38 @@ class EnhancedDataExtractor {
         document.getElementById('drawZoneBtn').addEventListener('click', () => {
             this.startDrawing();
         });
-        
+
         // Effacer la zone
         document.getElementById('clearZoneBtn').addEventListener('click', () => {
             this.clearZone();
         });
-        
+
         // Bouton d'extraction
         document.getElementById('extractBtn').addEventListener('click', () => {
             this.extractData();
         });
-        
+
         // Tout sélectionner
         document.getElementById('selectAllBtn').addEventListener('click', () => {
             this.selectAll(true);
         });
-        
+
         // Tout désélectionner
         document.getElementById('clearAllBtn').addEventListener('click', () => {
             this.selectAll(false);
         });
-        
+
         // Télécharger le JSON
         document.getElementById('downloadBtn').addEventListener('click', () => {
             this.downloadJSON();
         });
-        
+
         // Copier l'URL
         document.getElementById('copyUrlBtn').addEventListener('click', () => {
             this.copyURL();
         });
     }
-    
+
     /**
      * Démarrer le mode dessin
      */
@@ -90,52 +90,43 @@ class EnhancedDataExtractor {
         if (this.drawingMode) {
             return;
         }
-        
+
         this.clearZone();
         this.drawingMode = true;
         this.points = [];
         this.markers = [];
-        
-        // Changer le curseur
+
         document.getElementById('map').style.cursor = 'crosshair';
-        
-        // Mettre à jour le bouton
+
         const btn = document.getElementById('drawZoneBtn');
         btn.textContent = '✏️ Cliquez pour placer des points...';
         btn.classList.add('active');
-        
-        // Afficher les instructions
+
         this.showMessage('Cliquez pour placer des points. Cliquez sur le premier point pour fermer le polygone.', 'info');
     }
-    
+
     /**
      * Ajouter un point au polygone
      */
     addPoint(latlng) {
-        // Si on clique sur le premier point et qu'on a au moins 3 points, on ferme le polygone
         if (this.points.length >= 3) {
             const firstPoint = this.points[0];
-            
-            // Convertir les coordonnées géographiques en coordonnées pixels
+
             const firstPointPx = this.map.latLngToContainerPoint(firstPoint);
             const clickPointPx = this.map.latLngToContainerPoint(latlng);
-            
-            // Calculer la distance en pixels
+
             const dx = firstPointPx.x - clickPointPx.x;
             const dy = firstPointPx.y - clickPointPx.y;
             const distancePixels = Math.sqrt(dx * dx + dy * dy);
-            
-            // Si on est assez proche du premier point (moins de 15 pixels)
+
             if (distancePixels < 15) {
                 this.closePolygon();
                 return;
             }
         }
-        
-        // Ajouter le point
+
         this.points.push(latlng);
-        
-        // Créer un marqueur
+
         const marker = L.circleMarker(latlng, {
             radius: 6,
             fillColor: '#1a73e8',
@@ -144,13 +135,11 @@ class EnhancedDataExtractor {
             opacity: 1,
             fillOpacity: 0.8
         }).addTo(this.map);
-        
-        // Rendre le premier marqueur plus gros et vert
+
         if (this.points.length === 1) {
             marker.setRadius(8);
             marker.setStyle({ fillColor: '#10b981' });
-            
-            // Ajouter un événement de clic sur le premier marqueur
+
             marker.on('click', (e) => {
                 L.DomEvent.stopPropagation(e);
                 if (this.drawingMode && this.points.length >= 3) {
@@ -158,15 +147,14 @@ class EnhancedDataExtractor {
                 }
             });
         }
-        
+
         this.markers.push(marker);
-        
-        // Dessiner ou mettre à jour la ligne
+
         if (this.points.length > 1) {
             if (this.polyline) {
                 this.map.removeLayer(this.polyline);
             }
-            
+
             this.polyline = L.polyline(this.points, {
                 color: '#1a73e8',
                 weight: 2,
@@ -174,11 +162,10 @@ class EnhancedDataExtractor {
                 dashArray: '5, 10'
             }).addTo(this.map);
         }
-        
-        // Mettre à jour l'affichage
+
         this.updateZoneDisplay();
     }
-    
+
     /**
      * Fermer le polygone
      */
@@ -187,14 +174,12 @@ class EnhancedDataExtractor {
             this.showMessage('Vous devez placer au moins 3 points', 'error');
             return;
         }
-        
-        // Supprimer la polyline temporaire
+
         if (this.polyline) {
             this.map.removeLayer(this.polyline);
             this.polyline = null;
         }
-        
-        // Créer le polygone
+
         this.polygon = L.polygon(this.points, {
             color: '#1a73e8',
             weight: 2,
@@ -202,73 +187,63 @@ class EnhancedDataExtractor {
             fillColor: '#1a73e8',
             fillOpacity: 0.2
         }).addTo(this.map);
-        
-        // Désactiver le mode dessin
+
         this.drawingMode = false;
         document.getElementById('map').style.cursor = '';
-        
+
         const btn = document.getElementById('drawZoneBtn');
         btn.textContent = '🗺️ Redessiner la zone';
         btn.classList.remove('active');
-        
-        // Nettoyer les marqueurs
+
         this.markers.forEach(m => this.map.removeLayer(m));
         this.markers = [];
-        
-        // Zoomer sur le polygone
+
         this.map.fitBounds(this.polygon.getBounds(), { padding: [50, 50] });
-        
+
         this.showMessage('Zone définie avec succès!', 'success');
         this.updateZoneDisplay();
     }
-    
+
     /**
      * Effacer la zone
      */
     clearZone() {
-        // Arrêter le mode dessin
         this.drawingMode = false;
         document.getElementById('map').style.cursor = '';
-        
-        // Supprimer le polygone
+
         if (this.polygon) {
             this.map.removeLayer(this.polygon);
             this.polygon = null;
         }
-        
-        // Supprimer la polyline
+
         if (this.polyline) {
             this.map.removeLayer(this.polyline);
             this.polyline = null;
         }
-        
-        // Supprimer les marqueurs
+
         this.markers.forEach(m => this.map.removeLayer(m));
         this.markers = [];
-        
-        // Réinitialiser les points
+
         this.points = [];
-        
-        // Réinitialiser le bouton
+
         const btn = document.getElementById('drawZoneBtn');
         btn.textContent = '🖊️ Dessiner une zone';
         btn.classList.remove('active');
-        
-        // Mettre à jour l'affichage
+
         this.updateZoneDisplay();
     }
-    
+
     /**
      * Mettre à jour l'affichage de la zone
      */
     updateZoneDisplay() {
         const zoneStatus = document.getElementById('zoneStatus');
-        
+
         if (this.polygon) {
             const bounds = this.polygon.getBounds();
             const area = L.GeometryUtil.geodesicArea(this.polygon.getLatLngs()[0]);
             const areaKm2 = (area / 1000000).toFixed(2);
-            
+
             zoneStatus.innerHTML = `
                 <div class="zone-defined">
                     <strong>✅ Zone définie</strong>
@@ -299,7 +274,7 @@ class EnhancedDataExtractor {
             `;
         }
     }
-    
+
     /**
      * Afficher un message
      */
@@ -308,14 +283,14 @@ class EnhancedDataExtractor {
         const messageDiv = document.createElement('div');
         messageDiv.className = `overlay-message ${type}`;
         messageDiv.textContent = text;
-        
+
         overlay.appendChild(messageDiv);
-        
+
         setTimeout(() => {
             messageDiv.remove();
         }, 3000);
     }
-    
+
     /**
      * Sélectionner / désélectionner toutes les cases
      */
@@ -323,7 +298,7 @@ class EnhancedDataExtractor {
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
         checkboxes.forEach(cb => cb.checked = checked);
     }
-    
+
     /**
      * Construire l'objet GeoJSON de la zone
      */
@@ -331,57 +306,56 @@ class EnhancedDataExtractor {
         if (!this.polygon) {
             throw new Error('Aucune zone définie');
         }
-        
+
         const latlngs = this.polygon.getLatLngs()[0];
         const coordinates = latlngs.map(ll => [ll.lng, ll.lat]);
-        
-        // Fermer le polygone
+
+
         coordinates.push(coordinates[0]);
-        
+
         return {
             type: 'Polygon',
             coordinates: [coordinates]
         };
     }
-    
+
     /**
      * Récupérer les paramètres sélectionnés
      */
     getSelectedParams() {
         const params = {};
-        
-        // Liste de tous les paramètres possibles
+
         const paramNames = [
-            'school', 'station', 'supermarket', 'mall', 'bakery', 
-            'leisure', 'restaurant', 'factory', 'hospital', 
+            'school', 'station', 'supermarket', 'mall', 'bakery',
+            'leisure', 'restaurant', 'factory', 'hospital',
             'fire_station', 'police_station',
             'residential_zone', 'commercial_zone', 'industrial_zone',
             'forest_zone', 'farmland_zone'
         ];
-        
+
         paramNames.forEach(name => {
             const checkbox = document.getElementById(name);
             params[name] = checkbox.checked ? 'true' : 'false';
         });
-        
+
         return params;
     }
-    
+
     /**
      * Construire l'URL de requête
      */
     buildURL() {
         const zone = this.getBoundsGeoJSON();
         const params = this.getSelectedParams();
-        
+
         const queryParams = new URLSearchParams({
             zone: JSON.stringify(zone),
             ...params
         });
-        
+
         return `/api/enhanced-data/?${queryParams.toString()}`;
     }
-    
+
     /**
      * Extraire les données
      */
@@ -389,52 +363,47 @@ class EnhancedDataExtractor {
         const extractBtn = document.getElementById('extractBtn');
         const resultsSection = document.getElementById('resultsSection');
         const resultsContent = document.getElementById('resultsContent');
-        
-        // Vérifier qu'une zone est définie
+
         if (!this.polygon) {
             this.showMessage('Veuillez d\'abord dessiner une zone', 'error');
             resultsContent.innerHTML = '<div class="result-error">⚠️ Veuillez d\'abord dessiner une zone sur la carte</div>';
             resultsSection.classList.remove('hidden');
             return;
         }
-        
-        // Vérifier qu'au moins une option est sélectionnée
+
         const params = this.getSelectedParams();
         const hasSelection = Object.values(params).some(v => v === 'true');
-        
+
         if (!hasSelection) {
             this.showMessage('Veuillez sélectionner au moins un type de données', 'error');
             resultsContent.innerHTML = '<div class="result-error">⚠️ Veuillez sélectionner au moins un type de données à extraire</div>';
             resultsSection.classList.remove('hidden');
             return;
         }
-        
-        // Afficher le chargement
+
         extractBtn.disabled = true;
         extractBtn.textContent = '⏳ Extraction en cours...';
         resultsSection.classList.remove('hidden');
         resultsContent.innerHTML = '<div class="result-loading">Extraction des données depuis OpenStreetMap via Overpass API...<br>Cela peut prendre quelques secondes.</div>';
-        
+
         try {
             const url = this.buildURL();
             const response = await fetch(url);
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
+
             const data = await response.json();
             this.lastResult = data;
-            
-            // Afficher les résultats
+
             this.displayResults(data);
-            
-            // Afficher les boutons d'action
+
             document.getElementById('downloadBtn').classList.remove('hidden');
             document.getElementById('copyUrlBtn').classList.remove('hidden');
-            
+
             this.showMessage('Extraction réussie!', 'success');
-            
+
         } catch (error) {
             resultsContent.innerHTML = `<div class="result-error">❌ Erreur lors de l'extraction:<br>${error.message}</div>`;
             this.showMessage('Erreur lors de l\'extraction', 'error');
@@ -443,36 +412,34 @@ class EnhancedDataExtractor {
             extractBtn.textContent = '🚀 Extraire les données';
         }
     }
-    
+
     /**
      * Afficher les résultats
      */
     displayResults(data) {
         const resultsContent = document.getElementById('resultsContent');
-        
+
         const elementsCount = data.elements ? data.elements.length : 0;
-        
+
         let html = `<div class="result-success">✅ Extraction réussie!</div>`;
         html += `<div class="result-stats">`;
         html += `<div class="stat-item">
             <strong>Éléments trouvés:</strong>
             <span>${elementsCount}</span>
         </div>`;
-        
+
         if (data.elements && data.elements.length > 0) {
-            // Compter les types d'éléments
             const types = {};
             data.elements.forEach(el => {
                 const type = el.type || 'unknown';
                 types[type] = (types[type] || 0) + 1;
             });
-            
+
             html += `<div class="stat-item">
                 <strong>Types d'éléments:</strong>
                 <span>${Object.keys(types).length}</span>
             </div>`;
-            
-            // Détails par type
+
             for (const [type, count] of Object.entries(types)) {
                 const icon = type === 'node' ? '📍' : type === 'way' ? '🛣️' : '🗺️';
                 html += `<div class="stat-item">
@@ -481,12 +448,12 @@ class EnhancedDataExtractor {
                 </div>`;
             }
         }
-        
+
         html += `</div>`;
-        
+
         resultsContent.innerHTML = html;
     }
-    
+
     /**
      * Télécharger le JSON
      */
@@ -495,11 +462,11 @@ class EnhancedDataExtractor {
             alert('Aucune donnée à télécharger');
             return;
         }
-        
+
         const dataStr = JSON.stringify(this.lastResult, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        
+
         const a = document.createElement('a');
         a.href = url;
         a.download = `enhanced_data_${Date.now()}.json`;
@@ -508,13 +475,13 @@ class EnhancedDataExtractor {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }
-    
+
     /**
      * Copier l'URL de la requête
      */
     copyURL() {
         const url = window.location.origin + this.buildURL();
-        
+
         navigator.clipboard.writeText(url).then(() => {
             const btn = document.getElementById('copyUrlBtn');
             const originalText = btn.textContent;
@@ -528,7 +495,6 @@ class EnhancedDataExtractor {
     }
 }
 
-// Ajouter L.GeometryUtil pour le calcul de surface
 L.GeometryUtil = L.extend(L.GeometryUtil || {}, {
     geodesicArea: function (latLngs) {
         var pointsCount = latLngs.length,
@@ -541,7 +507,7 @@ L.GeometryUtil = L.extend(L.GeometryUtil || {}, {
                 p1 = latLngs[i];
                 p2 = latLngs[(i + 1) % pointsCount];
                 area += ((p2.lng - p1.lng) * d2r) *
-                        (2 + Math.sin(p1.lat * d2r) + Math.sin(p2.lat * d2r));
+                    (2 + Math.sin(p1.lat * d2r) + Math.sin(p2.lat * d2r));
             }
             area = area * 6378137.0 * 6378137.0 / 2.0;
         }
@@ -550,7 +516,6 @@ L.GeometryUtil = L.extend(L.GeometryUtil || {}, {
     }
 });
 
-// Initialisation au chargement de la page
 document.addEventListener('DOMContentLoaded', () => {
     const extractor = new EnhancedDataExtractor();
     window.extractor = extractor;

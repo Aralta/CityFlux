@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard - MobiFlux</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e8e8e8;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header h1 {
+            color: #fff;
+            text-shadow: 0 2px 10px rgba(102, 126, 234, 0.5);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 1.25rem;
+            text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-card.purple {
+            border-top: 4px solid #667eea;
+        }
+
+        .stat-card.green {
+            border-top: 4px solid #38ef7d;
+        }
+
+        .stat-card.blue {
+            border-top: 4px solid #4facfe;
+        }
+
+        .stat-card.orange {
+            border-top: 4px solid #f5576c;
+        }
+
+        .stat-card.yellow {
+            border-top: 4px solid #ffd200;
+        }
+
+        .stat-card.pink {
+            border-top: 4px solid #fa709a;
+        }
+
+        .stat-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 0.25rem;
+        }
+
+        .stat-sub {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 0.5rem;
+        }
+
+        .section-title {
+            font-size: 1.4rem;
+            color: #fff;
+            margin: 2.5rem 0 1.25rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid rgba(102, 126, 234, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Pie Chart Container */
+        .chart-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .chart-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .chart-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .pie-chart {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .pie-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            background: #1a1a2e;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pie-center-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .pie-center-label {
+            font-size: 0.7rem;
+            color: #aaa;
+        }
+
+        .legend {
+            flex: 1;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.6rem;
+            font-size: 0.9rem;
+        }
+
+        .legend-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            margin-right: 0.75rem;
+            flex-shrink: 0;
+        }
+
+        .legend-label {
+            flex: 1;
+            color: #ccc;
+        }
+
+        .legend-value {
+            font-weight: 600;
+            color: #fff;
+            margin-left: 0.5rem;
+        }
+
+        .legend-percent {
+            color: #888;
+            font-size: 0.8rem;
+            margin-left: 0.25rem;
+        }
+
+        /* Map */
+        .map-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .map-container {
+            height: 300px;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .centroid-info {
+            text-align: center;
+            padding: 1rem;
+            color: #aaa;
+        }
+
+        .centroid-coords {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            color: #4facfe;
+            background: rgba(79, 172, 254, 0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            display: inline-block;
+            margin-top: 0.5rem;
+        }
+
+        /* Button */
+        .btn-analyze {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-analyze:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+        }
+
+        .btn-analyze:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .form-section {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1.5rem;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 1.2rem;
+            height: 1.2rem;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .status-message {
+            text-align: center;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .status-pending {
+            background: rgba(102, 126, 234, 0.2);
+            color: #a8b4ff;
+        }
+
+        .status-success {
+            background: rgba(56, 239, 125, 0.2);
+            color: #38ef7d;
+        }
+
+        .status-error {
+            background: rgba(245, 87, 108, 0.2);
+            color: #f5576c;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Pie chart colors */
+        :root {
+            --pie-1: #667eea;
+            --pie-2: #38ef7d;
+            --pie-3: #4facfe;
+            --pie-4: #f5576c;
+            --pie-5: #ffd200;
+            --pie-6: #fa709a;
+            --pie-7: #a8e063;
+            --pie-8: #ff6b6b;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <a href="/compute/" class="back-link">← Retour aux Scripts</a>
+
+        <header class="header">
+            <h1>📊 Analytics Dashboard</h1>
+            <p class="subtitle">Statistiques complètes sur les données de mobilité</p>
+        </header>
+
+        <main>
+            <div class="form-section">
+                <button id="analyzeBtn" class="btn-analyze" onclick="triggerAnalysis()">
+                    🔍 Lancer l'analyse complète
+                </button>
+                <div id="statusArea" class="hidden"></div>
+            </div>
+
+            <div id="resultsArea" class="hidden">
+                <h2 class="section-title">📈 Vue d'ensemble</h2>
+                <div class="dashboard-grid" id="summaryGrid"></div>
+
+                <h2 class="section-title">🛤️ Trajectoires</h2>
+                <div class="dashboard-grid" id="trajectoriesGrid"></div>
+
+                <h2 class="section-title">📊 Répartition des données</h2>
+                <div class="chart-section">
+                    <div class="chart-container">
+                        <h3 style="margin: 0 0 1rem; color: #fff;">📍 Points d'intérêt</h3>
+                        <div class="chart-wrapper">
+                            <div class="pie-chart" id="poiPieChart">
+                                <div class="pie-center">
+                                    <div class="pie-center-value" id="poiTotal">0</div>
+                                    <div class="pie-center-label">POI</div>
+                                </div>
+                            </div>
+                            <div class="legend" id="poiLegend"></div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h3 style="margin: 0 0 1rem; color: #fff;">🗺️ Zones</h3>
+                        <div class="chart-wrapper">
+                            <div class="pie-chart" id="zonePieChart">
+                                <div class="pie-center">
+                                    <div class="pie-center-value" id="zoneTotal">0</div>
+                                    <div class="pie-center-label">Zones</div>
+                                </div>
+                            </div>
+                            <div class="legend" id="zoneLegend"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <h2 class="section-title">📌 Point Central des Données</h2>
+                <div class="map-section">
+                    <div id="centroidMap" class="map-container"></div>
+                    <div class="centroid-info">
+                        <span>Coordonnées du centroïde :</span><br>
+                        <span id="centroidCoords" class="centroid-coords">--</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2025 - 2026 MobiFlux - Mobilité Urbaine</p>
+        </footer>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const PIE_COLORS = ['#667eea', '#38ef7d', '#4facfe', '#f5576c', '#ffd200', '#fa709a', '#a8e063', '#ff6b6b'];
+        let map = null;
+
+        async function triggerAnalysis() {
+            const btn = document.getElementById('analyzeBtn');
+            const statusArea = document.getElementById('statusArea');
+            const resultsArea = document.getElementById('resultsArea');
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Analyse en cours...';
+            statusArea.classList.remove('hidden');
+            statusArea.className = 'status-message status-pending';
+            statusArea.innerHTML = '<span class="spinner"></span> Soumission du job Spark...';
+            resultsArea.classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/analytics/trigger/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                    body: JSON.stringify({})
+                });
+
+                const result = await response.json();
+                if (response.ok && result.job_id) {
+                    statusArea.innerHTML = '<span class="spinner"></span> Job soumis. Traitement en cours...';
+                    pollForResults(result.job_id);
+                } else {
+                    throw new Error(result.error || 'Erreur lors de la soumission');
+                }
+            } catch (error) {
+                showError(error.message);
+                resetButton();
+            }
+        }
+
+        async function pollForResults(jobId) {
+            const statusArea = document.getElementById('statusArea');
+            let attempts = 0;
+            const maxAttempts = 120;
+
+            const poll = async () => {
+                attempts++;
+                try {
+                    const response = await fetch(`/api/analytics/status/${jobId}/`);
+                    const data = await response.json();
+
+                    if (data.status === 'completed') {
+                        displayResults(data);
+                        statusArea.className = 'status-message status-success';
+                        statusArea.innerHTML = '✅ Analyse terminée avec succès !';
+                        resetButton();
+                    } else if (data.status === 'error' || data.status === 'failed') {
+                        throw new Error(data.error || 'Le job a échoué');
+                    } else if (attempts < maxAttempts) {
+                        statusArea.innerHTML = `<span class="spinner"></span> Traitement en cours... (${attempts * 2}s)`;
+                        setTimeout(poll, 2000);
+                    } else {
+                        throw new Error('Timeout: le job prend trop de temps');
+                    }
+                } catch (error) {
+                    showError(error.message);
+                    resetButton();
+                }
+            };
+            poll();
+        }
+
+        function showError(message) {
+            const statusArea = document.getElementById('statusArea');
+            statusArea.className = 'status-message status-error';
+            statusArea.innerHTML = `❌ Erreur: ${message}`;
+        }
+
+        function resetButton() {
+            const btn = document.getElementById('analyzeBtn');
+            btn.disabled = false;
+            btn.innerHTML = '🔍 Lancer l\'analyse complète';
+        }
+
+        function displayResults(data) {
+            document.getElementById('resultsArea').classList.remove('hidden');
+
+            // Summary
+            document.getElementById('summaryGrid').innerHTML = `
+                <div class="stat-card purple"><div class="stat-icon">📍</div><div class="stat-value">${data.pois.total_pois}</div><div class="stat-label">Points d'intérêt</div></div>
+                <div class="stat-card green"><div class="stat-icon">🗺️</div><div class="stat-value">${data.zones.total_zones}</div><div class="stat-label">Zones</div></div>
+                <div class="stat-card blue"><div class="stat-icon">🚏</div><div class="stat-value">${data.transport.total_stops}</div><div class="stat-label">Arrêts</div></div>
+                <div class="stat-card orange"><div class="stat-icon">🚌</div><div class="stat-value">${data.transport.total_lines}</div><div class="stat-label">Lignes</div></div>
+            `;
+
+            // Trajectories
+            const traj = data.trajectories;
+            document.getElementById('trajectoriesGrid').innerHTML = `
+                <div class="stat-card yellow"><div class="stat-icon">🛤️</div><div class="stat-value">${traj.total_trajectories}</div><div class="stat-label">Trajectoires</div><div class="stat-sub">${traj.total_points} points</div></div>
+                <div class="stat-card pink"><div class="stat-icon">📏</div><div class="stat-value">${traj.max_distance_km} km</div><div class="stat-label">Distance max</div></div>
+                <div class="stat-card green"><div class="stat-icon">⚡</div><div class="stat-value">${traj.max_speed_kmh} km/h</div><div class="stat-label">Vitesse max</div><div class="stat-sub">Moy: ${traj.avg_speed_kmh} km/h</div></div>
+                <div class="stat-card blue"><div class="stat-icon">📅</div><div class="stat-value">${traj.time_range.start ? formatDate(traj.time_range.start) : '-'}</div><div class="stat-label">Période</div></div>
+            `;
+
+            // Pie Charts
+            renderPieChart('poiPieChart', 'poiLegend', 'poiTotal', data.pois.distribution_by_type, data.pois.total_pois);
+            renderPieChart('zonePieChart', 'zoneLegend', 'zoneTotal', data.zones.distribution_by_type, data.zones.total_zones);
+
+            // Map
+            const centroid = data.global_centroid;
+            document.getElementById('centroidCoords').textContent = `${centroid.lat.toFixed(6)}, ${centroid.lon.toFixed(6)}`;
+            if (map) map.remove();
+            map = L.map('centroidMap').setView([centroid.lat, centroid.lon], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+            L.marker([centroid.lat, centroid.lon]).addTo(map).bindPopup('<b>Centroïde</b>').openPopup();
+        }
+
+        function renderPieChart(chartId, legendId, totalId, distribution, total) {
+            const chart = document.getElementById(chartId);
+            document.getElementById(totalId).textContent = total;
+
+            if (!distribution || distribution.length === 0) {
+                chart.style.background = '#333';
+                document.getElementById(legendId).innerHTML = '<p style="color:#888">Aucune donnée</p>';
+                return;
+            }
+
+            // Build conic gradient
+            let gradientParts = [];
+            let currentAngle = 0;
+            distribution.slice(0, 8).forEach((item, i) => {
+                const startAngle = currentAngle;
+                currentAngle += (item.percentage / 100) * 360;
+                gradientParts.push(`${PIE_COLORS[i]} ${startAngle}deg ${currentAngle}deg`);
+            });
+            if (currentAngle < 360) {
+                gradientParts.push(`#444 ${currentAngle}deg 360deg`);
+            }
+            chart.style.background = `conic-gradient(${gradientParts.join(', ')})`;
+
+            // Legend
+            let legendHtml = '';
+            distribution.slice(0, 8).forEach((item, i) => {
+                legendHtml += `
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: ${PIE_COLORS[i]}"></div>
+                        <span class="legend-label">${capitalizeFirst(item.type)}</span>
+                        <span class="legend-value">${item.count}</span>
+                        <span class="legend-percent">(${item.percentage}%)</span>
+                    </div>
+                `;
+            });
+            document.getElementById(legendId).innerHTML = legendHtml;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            return new Date(dateStr).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+
+        function capitalizeFirst(str) {
+            if (!str) return 'Inconnu';
+            return str.charAt(0).toUpperCase() + str.slice(1).replace(/_/g, ' ');
+        }
+
+        function getCsrfToken() {
+            const cookies = document.cookie.split(';');
+            for (let c of cookies) {
+                const [name, value] = c.trim().split('=');
+                if (name === 'csrftoken') return value;
+            }
+            return '';
+        }
+    </script>
+</body>
+
+</html>

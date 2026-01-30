@@ -39,10 +39,13 @@ services:
     hostname: spark-master
     environment:
       - SPARK_MODE=master
-      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_HOST=0.0.0.0
       - SPARK_MASTER_PORT=7077
       - SPARK_MASTER_WEBUI_PORT=8080
       - SPARK_NO_RSYNC=true
+      - SPARK_LOCAL_HOSTNAME=spark-master
+    extra_hosts:
+      - "spark-master:127.0.0.1"
     entrypoint: [ './entrypoint.sh', 'master' ]
     ports:
       - '8080:8080'
@@ -68,7 +71,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_MASTER_URL=${SPARK_MASTER_URL}
       - SPARK_WORKER_CORES=6
       - SPARK_WORKER_MEMORY=6g
       - SPARK_NO_RSYNC=true

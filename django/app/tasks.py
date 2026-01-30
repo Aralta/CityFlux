@@ -5,7 +5,7 @@ import uuid
 import redis
 
 
-Spark_local_script = ["map_data_process.py", "upper.py", "data_converter.py"]
+Spark_local_script = ["map_data_process.py", "upper.py", "data_converter.py", "mode_guesser.py", "trip_purpose_guesser.py", "analytics_processor.py"]
 SHARED_DATA_PATH = "/app/data" if os.path.exists("/app/data") else "/opt/spark/data"
 
 

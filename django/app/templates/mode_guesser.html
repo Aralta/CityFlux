@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transport Mode Guesser - MobiFlux</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .form-section {
+            margin-bottom: 2rem;
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .form-label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+        }
+
+        .form-control,
+        .form-select {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            box-sizing: border-box;
+        }
+
+        .trajectory-selector {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 0.5rem;
+            background: #fafafa;
+        }
+
+        .trajectory-item {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .trajectory-item:hover {
+            background: #e3f2fd;
+        }
+
+        .trajectory-item:last-child {
+            border-bottom: none;
+        }
+
+        .trajectory-item input[type="checkbox"] {
+            margin-right: 0.75rem;
+            width: 18px;
+            height: 18px;
+        }
+
+        .select-all-container {
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #1a73e8;
+        }
+
+        .btn-submit {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 1.1rem;
+            transition: background 0.2s;
+        }
+
+        .btn-submit:hover {
+            background: #1557b0;
+        }
+
+        .btn-submit:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 4px;
+            margin-top: 1rem;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+
+        .spinner {
+            display: inline-block;
+            width: 1.2rem;
+            height: 1.2rem;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+
+        .spinner-dark {
+            border-color: rgba(0, 0, 0, 0.1);
+            border-top-color: #3498db;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Results Table */
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .results-table th,
+        .results-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .results-table th {
+            background: #1a73e8;
+            color: white;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        .results-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .mode-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+
+        .mode-walking {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .mode-cycling {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .mode-public-transport {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .mode-car {
+            background: #fce4ec;
+            color: #c2185b;
+        }
+
+        .mode-unknown {
+            background: #eceff1;
+            color: #546e7a;
+        }
+
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-card.walking {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .stat-card.cycling {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .stat-card.public-transport {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .stat-card.car {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .synthetic-warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .synthetic-warning::before {
+            content: '⚠️';
+        }
+
+        .row-synthetic {
+            background: #fff8e1 !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <a href="/compute/" class="back-link">← Retour aux Scripts</a>
+
+        <header class="header">
+            <h1>🚗 Transport Mode Guesser</h1>
+            <p class="subtitle">Deviner le moyen de transport à partir des trajectoires GNSS</p>
+        </header>
+
+        <main>
+
+            <div class="form-section">
+                <form id="guesserForm">
+                    {% csrf_token %}
+
+                    <div class="mb-4">
+                        <label class="form-label">1. Sélectionnez les trajectoires à analyser</label>
+                        <div class="select-all-container">
+                            <label class="trajectory-item" style="font-weight: bold; background: #e3f2fd;">
+                                <input type="checkbox" id="selectAll">
+                                <span>Sélectionner tout ({{ trajectory_ids|length }} trajectoires)</span>
+                            </label>
+                        </div>
+                        <div class="trajectory-selector" id="trajectoryList">
+                            {% for traj_id in trajectory_ids %}
+                            <label class="trajectory-item">
+                                <input type="checkbox" name="trajectory_ids" value="{{ traj_id }}">
+                                <span>{{ traj_id }}</span>
+                            </label>
+                            {% empty %}
+                            <p style="padding: 1rem; color: #666;">Aucune trajectoire disponible. Veuillez d'abord
+                                importer des données GNSS.</p>
+                            {% endfor %}
+                        </div>
+                        <small style="color: #666; margin-top: 0.5rem; display: block;">
+                            <span id="selectedCount">0</span> trajectoire(s) sélectionnée(s)
+                        </small>
+                    </div>
+
+                    <button type="submit" class="btn-submit" id="submitBtn">🔍 Lancer l'analyse</button>
+                </form>
+            </div>
+
+
+            <div id="statusArea" class="hidden">
+                <div class="alert alert-info">
+                    <div class="spinner spinner-dark"></div>
+                    <span id="statusText">Envoi de la requête...</span>
+                </div>
+            </div>
+
+
+            <div id="resultArea" class="hidden"></div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2025 - 2026 MobiFlux - Mobilité Urbaine</p>
+        </footer>
+    </div>
+
+    <script>
+        const selectAllCheckbox = document.getElementById('selectAll');
+        const trajectoryCheckboxes = document.querySelectorAll('input[name="trajectory_ids"]');
+        const selectedCountSpan = document.getElementById('selectedCount');
+
+        function updateSelectedCount() {
+            const count = document.querySelectorAll('input[name="trajectory_ids"]:checked').length;
+            selectedCountSpan.textContent = count;
+        }
+
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', function () {
+                trajectoryCheckboxes.forEach(cb => cb.checked = this.checked);
+                updateSelectedCount();
+            });
+        }
+
+        trajectoryCheckboxes.forEach(cb => {
+            cb.addEventListener('change', function () {
+                const allChecked = [...trajectoryCheckboxes].every(c => c.checked);
+                const someChecked = [...trajectoryCheckboxes].some(c => c.checked);
+                if (selectAllCheckbox) {
+                    selectAllCheckbox.checked = allChecked;
+                    selectAllCheckbox.indeterminate = someChecked && !allChecked;
+                }
+                updateSelectedCount();
+            });
+        });
+
+
+        document.getElementById('guesserForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const selected = [...document.querySelectorAll('input[name="trajectory_ids"]:checked')]
+                .map(cb => cb.value);
+
+            if (selected.length === 0) {
+                alert("Veuillez sélectionner au moins une trajectoire.");
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitBtn');
+            const statusArea = document.getElementById('statusArea');
+            const resultArea = document.getElementById('resultArea');
+            const statusText = document.getElementById('statusText');
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<div class="spinner"></div> Analyse en cours...';
+            statusArea.classList.remove('hidden');
+            resultArea.classList.add('hidden');
+            statusText.innerText = "Soumission du job Spark...";
+
+            try {
+                const response = await fetch('/api/mode-guesser/trigger/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({ trajectory_ids: selected })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.job_id) {
+                    statusText.innerText = "Job soumis. Attente des résultats...";
+                    pollForResults(result.job_id);
+                } else {
+                    throw new Error(result.error || "Erreur lors de la soumission");
+                }
+
+            } catch (error) {
+                statusArea.classList.add('hidden');
+                resultArea.classList.remove('hidden');
+                resultArea.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h3>❌ Erreur</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '🔍 Lancer l\'analyse';
+            }
+        });
+
+        async function pollForResults(jobId) {
+            const statusText = document.getElementById('statusText');
+            const statusArea = document.getElementById('statusArea');
+            const resultArea = document.getElementById('resultArea');
+            const submitBtn = document.getElementById('submitBtn');
+
+            let attempts = 0;
+            const maxAttempts = 60;
+
+            const poll = async () => {
+                attempts++;
+                try {
+                    const response = await fetch(`/api/mode-guesser/status/${jobId}/`);
+                    const data = await response.json();
+
+                    if (data.status === 'completed' && data.results) {
+                        displayResults(data.results);
+                        statusArea.classList.add('hidden');
+                        resultArea.classList.remove('hidden');
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '🔍 Lancer l\'analyse';
+                    } else if (data.status === 'failed') {
+                        throw new Error(data.error || "Le job a échoué");
+                    } else if (attempts < maxAttempts) {
+                        statusText.innerText = `Traitement en cours... (${attempts * 2}s)`;
+                        setTimeout(poll, 2000);
+                    } else {
+                        throw new Error("Timeout: le job prend trop de temps");
+                    }
+                } catch (error) {
+                    statusArea.classList.add('hidden');
+                    resultArea.classList.remove('hidden');
+                    resultArea.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h3>❌ Erreur</h3>
+                            <p>${error.message}</p>
+                        </div>
+                    `;
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '🔍 Lancer l\'analyse';
+                }
+            };
+
+            poll();
+        }
+
+        function displayResults(results) {
+            const resultArea = document.getElementById('resultArea');
+
+            const counts = { walking: 0, cycling: 0, 'public_transport': 0, car: 0, unknown: 0 };
+            results.forEach(r => {
+                const mode = r.guessed_mode || 'unknown';
+                counts[mode] = (counts[mode] || 0) + 1;
+            });
+
+            let html = `
+                <div class="alert alert-success">
+                    <h3>✅ Analyse terminée !</h3>
+                    <p>${results.length} trajectoire(s) analysée(s)</p>
+                </div>
+
+                <div class="stats-container">
+                    <div class="stat-card walking">
+                        <div class="stat-value">${counts.walking}</div>
+                        <div class="stat-label">🚶 Marche</div>
+                    </div>
+                    <div class="stat-card cycling">
+                        <div class="stat-value">${counts.cycling}</div>
+                        <div class="stat-label">🚴 Vélo</div>
+                    </div>
+                    <div class="stat-card public-transport">
+                        <div class="stat-value">${counts.public_transport}</div>
+                        <div class="stat-label">🚌 Transport public</div>
+                    </div>
+                    <div class="stat-card car">
+                        <div class="stat-value">${counts.car}</div>
+                        <div class="stat-label">🚗 Voiture</div>
+                    </div>
+                </div>
+
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Trajectoire</th>
+                            <th>Vitesse Moy. (enreg.)</th>
+                            <th>Vitesse Moy. (calc.)</th>
+                            <th>Vitesse Max</th>
+                            <th>Distance</th>
+                            <th>Durée</th>
+                            <th>Mode estimé</th>
+                            <th>Qualité</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            results.forEach(r => {
+                const modeClass = getModeClass(r.guessed_mode);
+                const modeLabel = getModeLabel(r.guessed_mode);
+                const duration = formatDuration(r.duration_minutes);
+                const distance = r.distance_km ? r.distance_km.toFixed(2) + ' km' : 'N/A';
+                const calcSpeed = r.calculated_speed ? r.calculated_speed.toFixed(1) + ' km/h' : 'N/A';
+                const isSynthetic = r.is_synthetic || false;
+                const rowClass = isSynthetic ? 'row-synthetic' : '';
+
+                let speedMismatch = false;
+                if (r.calculated_speed && r.avg_speed > 0) {
+                    const diff = Math.abs(r.calculated_speed - r.avg_speed) / r.avg_speed;
+                    speedMismatch = diff > 0.5;
+                }
+                const calcSpeedClass = speedMismatch ? 'style="color: #d32f2f; font-weight: bold;"' : '';
+
+                const qualityCell = isSynthetic
+                    ? '<span class="synthetic-warning">Donnée synthétique détectée</span>'
+                    : '<span style="color: #2e7d32;">✓ OK</span>';
+
+                html += `
+                    <tr class="${rowClass}">
+                        <td><code>${r.trajectory_id}</code></td>
+                        <td>${r.avg_speed.toFixed(1)} km/h</td>
+                        <td ${calcSpeedClass}>${calcSpeed}</td>
+                        <td>${r.max_speed.toFixed(1)} km/h</td>
+                        <td>${distance}</td>
+                        <td>${duration}</td>
+                        <td><span class="mode-badge ${modeClass}">${modeLabel}</span></td>
+                        <td>${qualityCell}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+
+            resultArea.innerHTML = html;
+        }
+
+        function getModeClass(mode) {
+            const classes = {
+                walking: 'mode-walking',
+                cycling: 'mode-cycling',
+                public_transport: 'mode-public-transport',
+                car: 'mode-car'
+            };
+            return classes[mode] || 'mode-unknown';
+        }
+
+        function getModeLabel(mode) {
+            const labels = {
+                walking: '🚶 Marche',
+                cycling: '🚴 Vélo',
+                public_transport: '🚌 Transport public',
+                car: '🚗 Voiture'
+            };
+            return labels[mode] || '❓ Inconnu';
+        }
+
+        function formatDuration(minutes) {
+            if (!minutes || minutes < 0) return 'N/A';
+            if (minutes < 60) return `${Math.round(minutes)} min`;
+            const hours = Math.floor(minutes / 60);
+            const mins = Math.round(minutes % 60);
+            return `${hours}h ${mins}min`;
+        }
+    </script>
+</body>
+
+</html>

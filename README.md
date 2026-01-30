@@ -380,9 +380,14 @@ Le code a été refactorisé pour suivre les bonnes pratiques :
 
 ### Spark (`spark/app/`)
 
-| Fichier | Lignes | Description |
-|---------|--------|-------------|
-| `map_data_process.py` | ~310 | Traitement données avec mappings centralisés |
+| Fichier | Description |
+|---------|-------------|
+| `map_data_process.py` | Traitement données OpenStreetMap avec mappings centralisés |
+| `data_converter.py` | Conversion des données OD/GNSS/Telecom |
+| `mode_guesser.py` | Classification du mode de transport |
+| `trip_purpose_guesser.py` | Identification des motifs de déplacement |
+| `analytics_processor.py` | Dashboard analytics (stats POI, zones, trajectoires) |
+| `spark_job_listener.py` | Listener Redis pour jobs Spark asynchrones |
 
 ## Fichiers importants
 

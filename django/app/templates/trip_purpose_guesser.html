@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trip Purpose Guesser - MobiFlux</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <style>
+        .form-section {
+            margin-bottom: 2rem;
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .form-label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            box-sizing: border-box;
+        }
+
+        .trajectory-selector {
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 0.5rem;
+            background: #fafafa;
+        }
+
+        .trajectory-item {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .trajectory-item:hover {
+            background: #e3f2fd;
+        }
+
+        .trajectory-item input[type="checkbox"] {
+            margin-right: 0.75rem;
+            width: 18px;
+            height: 18px;
+        }
+
+        .select-all-container {
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #1a73e8;
+        }
+
+        .radius-slider {
+            width: 100%;
+            margin: 0.5rem 0;
+        }
+
+        .radius-value {
+            font-weight: bold;
+            color: #1a73e8;
+        }
+
+        .btn-submit {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 1.1rem;
+            transition: background 0.2s;
+        }
+
+        .btn-submit:hover {
+            background: #1557b0;
+        }
+
+        .btn-submit:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 4px;
+            margin-top: 1rem;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 1.2rem;
+            height: 1.2rem;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 0.5rem;
+        }
+
+        .spinner-dark {
+            border-color: rgba(0, 0, 0, 0.1);
+            border-top-color: #3498db;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Results */
+        .result-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-left: 5px solid #1a73e8;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .trajectory-id {
+            font-family: monospace;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #1a73e8;
+        }
+
+        .trip-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.95rem;
+        }
+
+        .trip-badge.domicile {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .trip-badge.travail {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .trip-badge.courses {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .trip-badge.loisirs {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .trip-badge.sante {
+            background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%);
+        }
+
+        .trip-badge.education {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            color: #333;
+        }
+
+        .trip-badge.transport {
+            background: linear-gradient(135deg, #5ee7df 0%, #b490ca 100%);
+        }
+
+        .endpoints-container {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 1rem;
+            align-items: stretch;
+        }
+
+        .endpoint-card {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        .endpoint-card.departure {
+            border-left: 4px solid #28a745;
+        }
+
+        .endpoint-card.arrival {
+            border-left: 4px solid #dc3545;
+        }
+
+        .endpoint-title {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .endpoint-title.departure {
+            color: #28a745;
+        }
+
+        .endpoint-title.arrival {
+            color: #dc3545;
+        }
+
+        .arrow-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: #1a73e8;
+        }
+
+        .poi-info {
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        .poi-name {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .poi-type {
+            color: #666;
+            font-size: 0.85rem;
+        }
+
+        .poi-distance {
+            color: #888;
+            font-size: 0.8rem;
+        }
+
+        .coords {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 0.5rem;
+        }
+
+        .time-info {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+
+        .purpose-icon {
+            font-size: 1.5rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-mini {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.75rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-mini.domicile {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .stat-mini.travail {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .stat-mini.courses {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .stat-mini.loisirs {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .stat-mini.sante {
+            background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%);
+        }
+
+        .stat-mini.education {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            color: #333;
+        }
+
+        .stat-mini.transport {
+            background: linear-gradient(135deg, #5ee7df 0%, #b490ca 100%);
+        }
+
+        .stat-mini.autre {
+            background: #95a5a6;
+        }
+
+        .stat-mini-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .stat-mini-label {
+            font-size: 0.8rem;
+            opacity: 0.9;
+        }
+
+        @media (max-width: 768px) {
+            .endpoints-container {
+                grid-template-columns: 1fr;
+            }
+
+            .arrow-container {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <a href="/compute/" class="back-link">← Retour aux Scripts</a>
+
+        <header class="header">
+            <h1>📍 Trip Purpose Guesser</h1>
+            <p class="subtitle">Identifier les points de départ/arrivée et deviner le motif du trajet</p>
+        </header>
+
+        <main>
+            <div class="form-section">
+                <form id="guesserForm">
+                    {% csrf_token %}
+
+                    <div class="mb-4">
+                        <label class="form-label">1. Sélectionnez les trajectoires à analyser</label>
+                        <div class="select-all-container">
+                            <label class="trajectory-item" style="font-weight: bold; background: #e3f2fd;">
+                                <input type="checkbox" id="selectAll">
+                                <span>Sélectionner tout ({{ trajectory_ids|length }} trajectoires)</span>
+                            </label>
+                        </div>
+                        <div class="trajectory-selector" id="trajectoryList">
+                            {% for traj_id in trajectory_ids %}
+                            <label class="trajectory-item">
+                                <input type="checkbox" name="trajectory_ids" value="{{ traj_id }}">
+                                <span>{{ traj_id }}</span>
+                            </label>
+                            {% empty %}
+                            <p style="padding: 1rem; color: #666;">Aucune trajectoire disponible.</p>
+                            {% endfor %}
+                        </div>
+                        <small style="color: #666;"><span id="selectedCount">0</span> trajectoire(s)
+                            sélectionnée(s)</small>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">2. Rayon de recherche POI/Zone</label>
+                        <input type="range" class="radius-slider" id="radiusSlider" min="100" max="1000" step="50"
+                            value="500">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #666;">
+                            <span>100m</span>
+                            <span class="radius-value" id="radiusValue">500m</span>
+                            <span>1000m</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-submit" id="submitBtn">📍 Analyser les trajets</button>
+                </form>
+            </div>
+
+            <div id="statusArea" class="hidden">
+                <div class="alert alert-info">
+                    <div class="spinner spinner-dark"></div>
+                    <span id="statusText">Envoi de la requête...</span>
+                </div>
+            </div>
+
+            <div id="resultArea" class="hidden"></div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2025 - 2026 MobiFlux - Mobilité Urbaine</p>
+        </footer>
+    </div>
+
+    <script>
+        // Select All
+        const selectAllCb = document.getElementById('selectAll');
+        const trajCbs = document.querySelectorAll('input[name="trajectory_ids"]');
+        const countSpan = document.getElementById('selectedCount');
+
+        function updateCount() {
+            countSpan.textContent = document.querySelectorAll('input[name="trajectory_ids"]:checked').length;
+        }
+
+        if (selectAllCb) {
+            selectAllCb.addEventListener('change', function () {
+                trajCbs.forEach(cb => cb.checked = this.checked);
+                updateCount();
+            });
+        }
+
+        trajCbs.forEach(cb => cb.addEventListener('change', updateCount));
+
+        // Radius slider
+        const radiusSlider = document.getElementById('radiusSlider');
+        const radiusValue = document.getElementById('radiusValue');
+        radiusSlider.addEventListener('input', () => {
+            radiusValue.textContent = radiusSlider.value + 'm';
+        });
+
+        // Form submit
+        document.getElementById('guesserForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const selected = [...document.querySelectorAll('input[name="trajectory_ids"]:checked')].map(cb => cb.value);
+            if (selected.length === 0) {
+                alert("Veuillez sélectionner au moins une trajectoire.");
+                return;
+            }
+
+            const radius = parseInt(radiusSlider.value);
+            const submitBtn = document.getElementById('submitBtn');
+            const statusArea = document.getElementById('statusArea');
+            const resultArea = document.getElementById('resultArea');
+            const statusText = document.getElementById('statusText');
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<div class="spinner"></div> Analyse en cours...';
+            statusArea.classList.remove('hidden');
+            resultArea.classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/trip-purpose/trigger/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({ trajectory_ids: selected, radius_m: radius })
+                });
+
+                const result = await response.json();
+                if (response.ok && result.job_id) {
+                    statusText.innerText = "Job soumis. Attente des résultats...";
+                    pollForResults(result.job_id);
+                } else {
+                    throw new Error(result.error || "Erreur lors de la soumission");
+                }
+            } catch (error) {
+                showError(error.message);
+            }
+        });
+
+        async function pollForResults(jobId) {
+            const statusText = document.getElementById('statusText');
+            let attempts = 0;
+            const maxAttempts = 90;
+
+            const poll = async () => {
+                attempts++;
+                try {
+                    const response = await fetch(`/api/trip-purpose/status/${jobId}/`);
+                    const data = await response.json();
+
+                    if (data.status === 'completed' && data.results) {
+                        displayResults(data.results);
+                    } else if (data.status === 'failed') {
+                        throw new Error(data.error || "Le job a échoué");
+                    } else if (attempts < maxAttempts) {
+                        statusText.innerText = `Traitement en cours... (${attempts * 2}s)`;
+                        setTimeout(poll, 2000);
+                    } else {
+                        throw new Error("Timeout");
+                    }
+                } catch (error) {
+                    showError(error.message);
+                }
+            };
+            poll();
+        }
+
+        function showError(msg) {
+            document.getElementById('statusArea').classList.add('hidden');
+            document.getElementById('resultArea').classList.remove('hidden');
+            document.getElementById('resultArea').innerHTML = `<div class="alert alert-danger"><h3>❌ Erreur</h3><p>${msg}</p></div>`;
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('submitBtn').innerHTML = '📍 Analyser les trajets';
+        }
+
+        function displayResults(results) {
+            document.getElementById('statusArea').classList.add('hidden');
+            document.getElementById('resultArea').classList.remove('hidden');
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('submitBtn').innerHTML = '📍 Analyser les trajets';
+
+            // Count by purpose
+            const counts = {};
+            results.forEach(r => {
+                const p = r.trip_purpose || 'autre';
+                counts[p] = (counts[p] || 0) + 1;
+            });
+
+            let html = `<div class="alert alert-success"><h3>✅ Analyse terminée !</h3><p>${results.length} trajet(s) analysé(s)</p></div>`;
+
+            // Stats grid
+            html += '<div class="stats-grid">';
+            const purposes = ['domicile', 'travail', 'courses', 'loisirs', 'sante', 'education', 'transport', 'autre'];
+            const icons = { domicile: '🏠', travail: '💼', courses: '🛒', loisirs: '🎭', sante: '🏥', education: '📚', transport: '🚉', autre: '❓' };
+            purposes.forEach(p => {
+                if (counts[p]) {
+                    html += `<div class="stat-mini ${p}"><div class="stat-mini-value">${counts[p]}</div><div class="stat-mini-label">${icons[p]} ${p.charAt(0).toUpperCase() + p.slice(1)}</div></div>`;
+                }
+            });
+            html += '</div>';
+
+            // Result cards
+            results.forEach(r => {
+                const dep = r.departure;
+                const arr = r.arrival;
+
+                html += `
+                <div class="result-card">
+                    <div class="result-header">
+                        <span class="trajectory-id">${r.trajectory_id}</span>
+                        <span class="trip-badge ${r.trip_purpose}">${r.trip_description || r.trip_purpose_icon + ' ' + r.trip_purpose}</span>
+                    </div>
+                    <div class="endpoints-container">
+                        <div class="endpoint-card departure">
+                            <div class="endpoint-title departure">🟢 Départ</div>
+                            <div class="poi-info">
+                                <span class="purpose-icon">${dep.purpose_icon}</span>
+                                <span class="poi-name">${dep.nearest_poi || dep.zone || 'Lieu inconnu'}</span>
+                                <div class="poi-type">${dep.poi_type || dep.zone_type || ''}</div>
+                                ${dep.poi_distance_m ? `<div class="poi-distance">à ${dep.poi_distance_m}m</div>` : ''}
+                            </div>
+                            <div class="coords">${dep.lat}, ${dep.lon}</div>
+                            ${dep.time ? `<div class="time-info">🕐 ${formatTime(dep.time)}</div>` : ''}
+                        </div>
+                        <div class="arrow-container">→</div>
+                        <div class="endpoint-card arrival">
+                            <div class="endpoint-title arrival">🔴 Arrivée</div>
+                            <div class="poi-info">
+                                <span class="purpose-icon">${arr.purpose_icon}</span>
+                                <span class="poi-name">${arr.nearest_poi || arr.zone || 'Lieu inconnu'}</span>
+                                <div class="poi-type">${arr.poi_type || arr.zone_type || ''}</div>
+                                ${arr.poi_distance_m ? `<div class="poi-distance">à ${arr.poi_distance_m}m</div>` : ''}
+                            </div>
+                            <div class="coords">${arr.lat}, ${arr.lon}</div>
+                            ${arr.time ? `<div class="time-info">🕐 ${formatTime(arr.time)}</div>` : ''}
+                        </div>
+                    </div>
+                </div>`;
+            });
+
+            document.getElementById('resultArea').innerHTML = html;
+        }
+
+        function formatTime(ts) {
+            if (!ts) return '';
+            try {
+                const d = new Date(ts);
+                return d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+            } catch { return ts; }
+        }
+    </script>
+</body>
+
+</html>

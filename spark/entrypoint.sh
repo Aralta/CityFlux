@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+# Fix pour la résolution du hostname Java
+# Java InetAddress.getLocalHost() a besoin que le hostname soit résolvable
+HOSTNAME_VAL=$(hostname)
+if ! getent hosts "$HOSTNAME_VAL" > /dev/null 2>&1; then
+    echo "127.0.0.1 $HOSTNAME_VAL" >> /etc/hosts
+    echo "✅ Ajouté $HOSTNAME_VAL dans /etc/hosts"
+fi
+
 SPARK_WORKLOAD=$1
 
 echo "🚀 Démarrage Spark en mode: $SPARK_WORKLOAD"
@@ -15,7 +23,7 @@ case "$SPARK_WORKLOAD" in
     ;;
   worker)
     echo "⚙️  Lancement du Spark Worker..."
-    exec start-worker.sh ${SPARK_MASTER}
+    exec start-worker.sh ${SPARK_MASTER_URL}
     ;;
   history)
     echo "📜 Lancement du Spark History Server..."

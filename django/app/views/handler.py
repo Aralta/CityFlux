@@ -142,3 +142,48 @@ def compute_view(request):
 def compute_wiki_view(request):
     """Page wiki pour créer un nouveau module"""
     return render(request, 'compute_wiki.html')
+
+
+def mode_guesser_view(request):
+    """Page du Transport Mode Guesser"""
+    from views.database import db_manager
+    
+    trajectory_ids = []
+    try:
+        if db_manager.connect():
+            trajectory_ids = db_manager.get_trajectory_ids()
+            db_manager.disconnect()
+    except Exception as e:
+        print(f"Error fetching trajectory IDs: {e}")
+    
+    return render(request, 'mode_guesser.html', {'trajectory_ids': trajectory_ids})
+
+
+def trip_purpose_guesser_view(request):
+    """Page du Trip Purpose Guesser"""
+    from views.database import db_manager
+    
+    trajectory_ids = []
+    try:
+        if db_manager.connect():
+            trajectory_ids = db_manager.get_trajectory_ids()
+            db_manager.disconnect()
+    except Exception as e:
+        print(f"Error fetching trajectory IDs: {e}")
+    
+    return render(request, 'trip_purpose_guesser.html', {'trajectory_ids': trajectory_ids})
+
+
+def analytics_view(request):
+    """Page du dashboard analytics"""
+    return render(request, 'analytics.html')
+
+
+def heatmap_wip_view(request):
+    """Page Work in Progress pour Heatmap"""
+    return render(request, 'heatmap_wip.html')
+
+
+def congestion_wip_view(request):
+    """Page Work in Progress pour Encombrement des Routes"""
+    return render(request, 'congestion_wip.html')

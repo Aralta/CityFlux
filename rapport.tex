@@ -1,0 +1,663 @@
+
+
+% Mettre un "%" devant les styles à ne pas utiliser
+\documentclass[french]{tai_info} % style TAI Info
+
+\usepackage[utf8]{inputenc} 
+\usepackage{babel}
+\usepackage[T1]{fontenc}
+\usepackage{url}
+
+% Packages ajoutés pour votre rapport
+\usepackage{pdfpages} % Pour inclure les annexes PDF
+\usepackage{rotating} % Pour tourner les images (sidewaysfigure)
+\usepackage{listings} % Pour afficher du code source
+\lstset{
+    basicstyle=\tiny\ttfamily,
+    breaklines=true,
+    frame=single,
+    captionpos=b,
+    showstringspaces=false
+}
+% Définition du langage YAML pour listings
+\lstdefinelanguage{yaml}{
+    keywords={true,false,null},
+    sensitive=false,
+    comment=[l]{\#},
+    morestring=[b]',
+    morestring=[b]"
+}
+
+% --- CORRECTION ICI ---
+% On charge simplement graphicx sans condition compliquée.
+% Il détectera automatiquement le bon mode (pdftex, dvips, etc.)
+\usepackage{graphicx} 
+% ----------------------
+
+
+\title[Carte d’analyse de la mobilité]{Carte d’analyse de la mobilité :\\
+Visualisation et augmentation de donnée de façon deployable }
+
+\author[Gaido--Amoros Alexia et Lenormand Yann]%
+       {Gaido--Amoros Alexia$^1$
+        et Lenormand Yann$^1$
+        \\
+         $^1$Aix-Marseille Université
+       }
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+    Dans le contexte actuel de la multiplication des sources de données géographique , les collectivités territoriales et autres orgdisposent de volumes de données de géolocalisation, dont l'exploitation reste complexe. 
+    Ce projet de TAI présente la conception et le développement d'une plateforme web modulaire dédiée à l'analyse et à la visualisation de la mobilité urbaine. 
+    \newline \newline
+    La solution proposée repose sur une architecture micro-services orchestrée par Docker, intégrant Apache Spark pour le traitement distribué des données massives (Big Data) et PostgreSQL/PostGIS pour la gestion des données spatiales. 
+    L'application, développée avec le framework Django, permet d'importer des traces GPS, d'identifier les modes de transport et de visualiser les flux de mobilité sur une carte interactive. 
+    Cet outil d'aide à la décision vise à permettre aux décideurs, aux associations et au PME d'identifier les besoins de leurs utilisateurs.
+\end{abstract}
+
+\keywords{Mobilité Urbaine, Big Data, Apache Spark, Django, Visualisation, Docker.}
+
+%-------------------------------------------------------------------------
+
+\section{Introduction}
+
+L'essor des technologies de géolocalisation et la multiplication des dispositifs connectés (smartphones, véhicules, capteurs IoT) ont généré une explosion du volume de données spatiales disponibles. Dans ce contexte, les collectivités territoriales, les associations et les PME se retrouvent confrontées à un paradoxe : elles disposent de données massives sur la mobilité, mais manquent d'outils accessibles pour les exploiter efficacement.
+
+La problématique centrale de ce projet réside dans la difficulté de transformer ces données brutes (traces GPS, fichiers OD) en informations décisionnelles claires, sans nécessiter des infrastructures propriétaires coûteuses comme ArcGIS. L'enjeu est double : il faut d'une part traiter des volumes importants de données (Big Data), et d'autre part restituer ces informations via une visualisation simple et intuitive.
+
+Pour répondre à ce besoin, nous avons conçu et développé « Carte d’analyse de la mobilité », une plateforme web modulaire et déployable. Notre solution technique s'appuie sur une architecture conteneurisée via Docker, garantissant une installation simple sur n'importe quel environnement. Elle combine la puissance de calcul distribué d'Apache Spark pour l'analyse des flux, la robustesse de PostgreSQL/PostGIS pour le stockage spatial, et la flexibilité du framework Django pour l'interface utilisateur.
+
+Ce rapport détaille la réalisation de ce projet en suivant le cheminement de notre développement. Après un état de l'art des solutions existantes, nous présenterons l'organisation du projet et les besoins fonctionnels identifiés. Nous exposerons ensuite nos choix techniques et l'architecture logicielle mise en place, avant de conclure sur l'usage utilisateur et les perspectives d'amélioration.
+
+\section{État de l'art}
+
+L'analyse de la mobilité urbaine repose sur l'utilisation de Systèmes d'Information Géographique (SIG). À l'heure actuelle, le paysage logiciel se divise principalement en deux catégories distinctes, laissant un vide pour les besoins spécifiques des collectivités :
+
+\begin{itemize}
+    \item \textbf{Les solutions « grand public » et légères} (ex: Google Maps, Waze, visionneuses OpenStreetMap). 
+    Ces outils sont orientés vers l'utilisateur final. Ils excellent dans la visualisation simple et le calcul d'itinéraires individuels. Cependant, ils ne permettent pas de traiter des données brutes en masse, ni d'effectuer des analyses statistiques complexes (comme l'identification de flux de population ou de motifs de déplacement) nécessaires aux décideurs. \newline
+    
+    \item \textbf{Les solutions professionnelles lourdes} (ex: ArcGIS Pro, QGIS). 
+    Ces logiciels de bureau sont extrêmement puissants et constituent la référence pour les géomaticiens. Ils permettent des traitements poussés, mais présentent des inconvénients majeurs pour notre cible : ils sont souvent coûteux (licences propriétaires), complexes à prendre en main, et difficilement déployables pour un accès web collaboratif simple au sein d'une mairie ou d'une collectivité.
+\end{itemize}
+
+Face à ce constat, notre projet vise à proposer une troisième voie : une plateforme web accessible (comme les solutions légères) mais adossée à une architecture Big Data capable de traiter de forts volumes de données (comme les solutions lourdes), grâce à l'utilisation d'Apache Spark et de Docker.
+
+\section{Organisation du projet}
+
+Ce projet s'inscrit dans le cadre d'un Travail d'Application Industrielle (TAI). La phase de lancement a débuté par une série d'échanges avec M. Nicolas Durand, enseignant-chercheur référent et commanditaire, afin de définir les besoins utilisateurs. Ces discussions ont permis d'établir un premier cahier des charges ainsi qu'un planning prévisionnel de réalisation (disponible en annexe).
+
+L'objectif général défini par le cahier des charges était le suivant : concevoir une plateforme logicielle capable de valoriser les données de mobilité urbaine (traces GPS, données de transport) pour fournir une aide à la décision.
+
+Le périmètre du projet a été structuré autour de trois axes fonctionnels majeurs :
+\begin{itemize}
+    \item \textbf{L'analyse des flux :} Comprendre les déplacements en identifiant les trajets fréquents, les modes de transport utilisés et les motifs (domicile, travail, loisirs).
+    \item \textbf{La visualisation :} Offrir une interface cartographique interactive permettant de repérer facilement les zones de congestion ou les besoins en infrastructures.
+    \item \textbf{La modularité technique :} Le livrable devait être une plateforme web facilement déployable (via Docker), capable de traiter des données massives (Big Data) tout en respectant l'anonymat des utilisateurs (RGPD).
+\end{itemize}
+
+Il a également été convenu que le projet se concentrerait exclusivement sur la couche logicielle (traitement et interface), excluant l'acquisition physique de capteurs ou l'hébergement en production.
+
+Concernant l'organisation des tâches, nous avons initialement suivi le calendrier préétabli. Cependant, la mise en place de l'architecture modulaire, tant au niveau global qu'à l'échelle des composants, ainsi que la réalisation des pipelines d'ingestion de données, se sont révélées plus complexes que prévu. Nous avons par conséquent adapté notre organisation en cours de route. Le déroulement effectif du projet a donc suivi le planning présenté ci-dessous.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{tai_info_latex_template_V1/figs/gant.png}
+    \caption{Diagramme de Gantt de la réalisation du projet.}
+    \label{fig:gantt}
+\end{figure}
+
+Ce diagramme illustre la chronologie réelle du projet. Nous nous sommes concentrés dans un premier temps sur la structure globale (infrastructure Docker), pierre angulaire du système et prérequis indispensable au reste des tâches. Dès l'établissement des conteneurs, nous avons pu débuter le développement de la plateforme web de manière itérative, en testant chaque nouvel élément intégré. Enfin, une fois les pipelines de récupération de données fiabilisés, nous nous sommes consacrés à la réalisation des scripts d'analyse pour valider la viabilité de notre architecture hybride, alliant calcul distribué et visualisation.
+
+\section{Besoin fonctionnel}
+
+L'analyse des besoins fonctionnels de ce projet a été menée en collaboration avec M. Nicolas Durand, permettant d'identifier les exigences essentielles de la plateforme. Ces besoins se structurent autour de trois axes principaux : la capacité à ingérer et transformer des données brutes de mobilité, la possibilité de visualiser ces données sur une interface cartographique intuitive, et la mise à disposition d'outils d'analyse automatisés pour en extraire des informations décisionnelles.
+
+La plateforme doit ainsi permettre l'import de fichiers de données variés (traces GPS au format GNSS, matrices Origine-Destination, données télécom) et les convertir dans un format unifié exploitable par les algorithmes d'analyse. Elle doit également offrir une interface de visualisation permettant de superposer différentes couches d'information (arrêts de transport, points d'intérêt, zones urbaines, trajectoires) sur un fond de carte interactif. Enfin, des modules de calcul doivent permettre d'enrichir automatiquement les données brutes en identifiant les modes de transport utilisés et les motifs de déplacement.
+
+\subsection{Besoin utilisateur}
+
+Les utilisateurs cibles de cette plateforme sont principalement les collectivités territoriales, les associations de mobilité et les PME du secteur des transports. Ces acteurs partagent un besoin commun : disposer d'un outil accessible permettant de comprendre les flux de déplacement sur leur territoire sans nécessiter de compétences techniques avancées en géomatique.
+
+Pour les collectivités, l'enjeu réside dans l'identification des zones de congestion, la détection des besoins en infrastructures de transport et l'évaluation de l'impact des politiques de mobilité. Les associations et PME recherchent quant à elles des outils d'analyse permettant de mieux comprendre les comportements de déplacement de leurs usagers ou clients. Dans tous les cas, l'interface doit rester simple et intuitive, permettant à un utilisateur non-expert d'importer ses données, de lancer une analyse et de visualiser les résultats en quelques clics.
+
+\subsection{Besoin technique}
+
+D'un point de vue technique, le projet doit répondre à plusieurs contraintes majeures. La première concerne la scalabilité : la plateforme doit être capable de traiter des volumes de données importants (plusieurs millions de points GPS) sans dégradation notable des performances. Cette exigence impose l'utilisation d'un framework de calcul distribué adapté au Big Data.
+
+La seconde contrainte porte sur la modularité et la facilité de déploiement. La solution doit pouvoir être installée sur n'importe quel environnement (serveur local, cloud) sans configuration complexe. L'utilisation de conteneurs Docker répond à ce besoin en garantissant la reproductibilité de l'environnement.
+
+Enfin, la plateforme doit respecter les principes du RGPD en matière de protection des données personnelles. Les traces de mobilité étant des données sensibles permettant potentiellement d'identifier les individus, les traitements doivent être conçus pour préserver l'anonymat des utilisateurs, notamment par l'agrégation des données et l'absence de stockage d'identifiants personnels directs.
+
+\section{Problematique et limite du projet}
+
+La problématique centrale de ce projet réside dans la difficulté de concilier accessibilité et puissance de traitement. Les solutions existantes imposent généralement un compromis : soit elles sont simples d'utilisation mais limitées en capacités d'analyse (applications grand public), soit elles offrent des fonctionnalités avancées mais nécessitent une expertise technique importante et des licences coûteuses (logiciels SIG professionnels).
+
+Notre approche vise à proposer une troisième voie en combinant une interface web accessible avec une infrastructure de calcul distribuée. Cependant, cette ambition se heurte à plusieurs limites inhérentes au périmètre du projet. Premièrement, le projet se concentre exclusivement sur la couche logicielle et exclut l'acquisition physique de capteurs ou de données. Les utilisateurs doivent donc disposer de leurs propres jeux de données pour exploiter la plateforme. Deuxièmement, l'hébergement en production n'entre pas dans le périmètre : la solution est livrée comme un environnement déployable, mais la mise en production effective reste à la charge de l'utilisateur final. Enfin, les algorithmes d'analyse implémentés (détection du mode de transport, identification du motif de déplacement) reposent sur des heuristiques basées sur des seuils de vitesse et de proximité aux points d'intérêt, et non sur des modèles d'apprentissage automatique plus sophistiqués.
+
+\section{Choix et idée technique géneral}
+
+\subsection{Ligne directrice}
+
+La conception de cette plateforme s'articule autour d'un principe fondamental : le découplage des responsabilités. Chaque composant du système doit assurer une fonction unique et bien définie, communiquant avec les autres composants via des interfaces standardisées. Cette approche, inspirée des architectures micro-services, permet d'isoler les évolutions et les pannes, de faciliter les tests unitaires, et de permettre la mise à l'échelle indépendante de chaque service selon les besoins.
+
+Le second principe directeur concerne la reproductibilité de l'environnement. Dans un contexte où la plateforme doit être déployable par des utilisateurs non-experts, il était essentiel de garantir que l'installation produise un résultat identique quelle que soit la machine hôte. L'utilisation de conteneurs Docker répond parfaitement à cette exigence en encapsulant chaque service avec ses dépendances.
+
+Enfin, le troisième principe porte sur l'expérience utilisateur. Malgré la complexité technique sous-jacente (calcul distribué, base de données spatiale), l'interface doit rester simple et intuitive. Les traitements longs doivent s'exécuter en arrière-plan sans bloquer l'interface, et l'utilisateur doit pouvoir suivre l'avancement de ses requêtes en temps réel.
+
+\subsection{Idée technique}
+
+L'idée technique centrale repose sur une architecture à trois tiers enrichie d'une couche de messagerie asynchrone. Le premier tiers, le serveur web Django, gère l'interface utilisateur et les API REST. Il ne réalise aucun calcul intensif mais délègue ces tâches au second tiers, le cluster Apache Spark, via un système de messages.
+
+Cette communication indirecte entre le web et le calcul constitue l'innovation architecturale principale du projet. Lorsqu'un utilisateur soumet une analyse, le serveur Django publie un message sur un canal Redis décrivant le travail à effectuer. Un composant dédié, le Spark Job Listener, écoute ce canal et déclenche l'exécution du script Spark correspondant via la commande \\texttt{spark-submit}. Une fois le traitement terminé, les résultats sont écrits dans la base de données PostgreSQL, troisième tiers de l'architecture, et le statut du job est mis à jour dans Redis pour informer l'interface utilisateur.
+
+Cette architecture présente plusieurs avantages : elle permet au serveur web de rester réactif même pendant des calculs longs, elle isole les ressources de calcul (mémoire, CPU) du serveur web, et elle facilite la mise à l'échelle horizontale du cluster Spark en ajoutant simplement des workers supplémentaires.
+
+\subsection{Technologies utilisées}
+
+Pour répondre aux exigences de modularité et de performance, nous avons opté pour une architecture micro-services. Chaque composant technique est isolé dans un conteneur spécifique, facilitant le déploiement et la maintenance. Le choix des technologies s'est porté sur des solutions open-source éprouvées pour le traitement de données massives et géospatiales :
+
+\begin{itemize}
+    \item \textbf{Docker et Docker Compose :} 
+    Ils constituent la fondation de notre infrastructure. L'orchestration des différents services (\texttt{db}, \texttt{spark-master}, \texttt{web}, etc.) est assurée par un fichier \texttt{docker-compose.yml}, garantissant que l'environnement de développement est identique à celui de déploiement, peu importe la machine hôte.
+    
+    \item \textbf{Apache Spark (PySpark) :} 
+    Utilisé pour le traitement distribué des données (Big Data). Nous avons configuré un cluster Spark complet comprenant un conteneur \texttt{spark-master} pour la gestion des ressources et plusieurs \texttt{spark-worker} pour l'exécution parallèle des tâches. Les scripts d'analyse sont écrits en Python (PySpark) pour traiter les fichiers GPS et OD volumineux.
+    
+    \item \textbf{PostgreSQL avec PostGIS :} 
+    Pour le stockage des données, nous utilisons le SGBD relationnel PostgreSQL. L'extension PostGIS est essentielle à notre projet car elle permet de stocker et de requêter efficacement des objets géométriques complexes (points, lignes, polygones) nécessaires à la représentation des trajets et des zones urbaines.
+    
+    \item \textbf{Django (Python) :} 
+    Ce framework web assure le rôle de serveur d'application. Il expose l'interface utilisateur et les API nécessaires à la communication entre le front-end et la base de données. Il gère également l'authentification et la logique métier de la plateforme.
+    
+    \item \textbf{Celery et Redis :} 
+    Permet de rendre peu couplé la partie calcul et la partie Web de plateforme et mis en place un système de tâches asynchrones. \textbf{Celery} gère la file d'attente des tâches, tandis que \textbf{Redis} agit comme "broker" (courtier de messages) et système de cache pour stocker les résultats temporaires et les états d'avancement.
+    
+    \item \textbf{Leaflet et OpenStreetMap :} 
+    Côté client (Front-end), la visualisation cartographique repose sur la librairie JavaScript Leaflet, utilisant les tuiles de fond de plan OpenStreetMap. Cela permet d'afficher les trajets et les résultats d'analyse de manière interactive directement dans le navigateur.
+    
+\end{itemize}
+
+\section{Architecture logicielle}
+
+L'architecture globale du projet repose sur une approche micro-services conteneurisée, composée de trois pôles principaux (Web, Données, Calcul) et d'une couche de messagerie, tous faiblement couplés. Cette structure a été conçue pour garantir que les traitements lourds (Big Data) n'impactent pas la fluidité de l'expérience utilisateur.
+
+Les interactions suivent un schéma strict pour réduire les interdépendances :
+\begin{itemize}
+    \item Le Serveur Web communique principalement en lecture avec la base de données pour l'affichage cartographique. Pour les calculs, il n'adresse pas directement le cluster Spark, mais dépose une tâche asynchrone via un courtier de messages (Redis).
+    \item Le Serveur de Calcul (Spark) fonctionne de manière isolée. Il récupère les données brutes (fichiers ou base de données), effectue les traitements distribués, et réécrit les résultats agrégés dans la base de données.
+    \item La Base de Données agit comme le pivot central pour la persistance, stockant à la fois les données brutes géospatiales et les résultats d'analyse.
+\end{itemize}
+
+Cette modularité permet de remplacer ou de mettre à l'échelle chaque composant indépendamment. Le projet se compose des conteneurs Docker détaillés dans le tableau :
+
+\begin{table}[htbp]
+    \centering
+    % Cette commande redimensionne le tableau à la largeur exacte de la colonne (\linewidth)
+    \resizebox{\linewidth}{!}{
+        \begin{tabular}{|l|l|p{5cm}|} % Réduit à 5cm pour aider
+            \hline
+            \textbf{Service} & \textbf{Technologie} & \textbf{Rôle et Description} \\
+            \hline
+            \hline
+            \texttt{db} & PostgreSQL + PostGIS & Stockage persistant des données géospatiales (Port 5432). \\ \hline
+            \texttt{web} & Django & Interface et logique métier (Port 8000). \\ \hline
+            \texttt{spark-m} & Spark & Orchestrateur cluster (Port 8080). \\ \hline
+            \texttt{spark-w} & Spark & Nœuds d'exécution. \\ \hline
+            \texttt{redis} & Redis & Broker de messages. \\ \hline
+            \texttt{celery} & Celery & Tâches d'arrière-plan. \\ \hline
+        \end{tabular}
+    }
+    \caption{Services Docker.}
+    \label{tab:docker_services_mini}
+\end{table}
+
+\subsection{Serveur web}
+
+Le serveur web constitue le point d'entrée de la plateforme pour les utilisateurs. Développé avec le framework Django, il assure plusieurs fonctions essentielles : le rendu des pages HTML, l'exposition des API REST pour la communication avec le front-end JavaScript, et la coordination des tâches asynchrones via Celery. L'application est structurée de manière modulaire, chaque fonctionnalité étant isolée dans un module dédié.
+
+\subsubsection{Module centrale}
+
+Le module central de l'application Django est implémenté dans le fichier \texttt{app.py}. Ce fichier définit la configuration du framework (connexion à la base de données, paramètres Celery, templates) ainsi que le routage des URLs vers les vues correspondantes. L'architecture choisie évite l'utilisation du système de modèles ORM de Django au profit de requêtes SQL directes via le module \texttt{database.py}, permettant une exploitation optimale des fonctionnalités géospatiales de PostGIS.
+
+Le serveur expose une dizaine d'endpoints, répartis entre les pages web (accueil, carte, console, modules de calcul) et les API REST (récupération des couches cartographiques, déclenchement des analyses, suivi des jobs). Cette séparation claire entre le rendu HTML et les données JSON facilite l'évolution indépendante du front-end et du back-end.
+
+\subsubsection{Module de gestion des jobs (Celery)}
+
+La gestion des tâches asynchrones est assurée par Celery, configuré dans le fichier \texttt{celery\_app.py}. Ce module permet au serveur web de déléguer les traitements longs sans bloquer les requêtes HTTP. Lorsqu'un utilisateur lance une analyse, la vue Django publie un message sur Redis contenant les paramètres du job (type de script, fichier d'entrée, identifiant unique).
+
+Le fichier \texttt{tasks.py} définit les tâches Celery disponibles, principalement orientées vers la communication avec le cluster Spark. Chaque tâche suit un schéma commun : validation des paramètres, publication du message sur le canal Redis, et retour immédiat d'un identifiant de job permettant au front-end de suivre l'avancement.
+
+\subsubsection{Module de cartographie (Leaflet)}
+
+L'interface cartographique repose sur la bibliothèque JavaScript Leaflet, intégrée dans le template \texttt{carte.html}. Le code JavaScript est organisé en trois fichiers distincts pour faciliter la maintenance : \texttt{carte-config.js} centralise les configurations (icônes des POI, couleurs des zones, paramètres des tuiles), \texttt{carte-utils.js} fournit les fonctions utilitaires (création d'icônes, calcul de couleurs), et \texttt{carte-controller.js} implémente la logique de contrôle (chargement des couches, gestion des filtres, interactions utilisateur).
+
+La carte permet d'afficher plusieurs types de couches : les arrêts de transport (marqueurs ponctuels), les points d'intérêt avec icônes catégorisées, les zones sous forme de polygones colorés, et les traces GPS sous forme de polylignes. Un système de filtres hiérarchiques permet de sélectionner les éléments à afficher selon leur type et sous-type.
+
+\subsubsection{Module de récupération des données (API)}
+
+Les API de récupération des données sont implémentées dans le fichier \texttt{carte.py}. Le dictionnaire \texttt{LAYERS\_CONFIG} centralise la configuration de toutes les couches disponibles, définissant pour chacune son type (marqueurs, polygones, lignes), ses paramètres d'affichage (couleurs, opacité) et ses filtres applicables.
+
+Les endpoints \texttt{/api/layers/} et \texttt{/api/layers/<layer\_id>/data/} permettent respectivement de lister les couches disponibles et de récupérer les données d'une couche spécifique. Ces API acceptent des paramètres de filtrage (bounding box, type, sous-type) et retournent les données au format GeoJSON, directement exploitable par Leaflet.
+
+\subsubsection{Fonctionnalités et autres modules}
+
+Au-delà de la cartographie, la plateforme expose plusieurs modules fonctionnels accessibles depuis l'interface. Le module de conversion (\texttt{conversion.html}) permet d'importer des fichiers de données (CSV, JSON) et de les convertir au format GNSS unifié. Les modules d'analyse (\texttt{mode\_guesser.html} et \texttt{trip\_purpose\_guesser.html}) permettent de lancer les algorithmes de détection du mode de transport et du motif de déplacement.
+
+Le dashboard analytique (\texttt{analytics.html}) offre une vue d'ensemble des données de la plateforme sous forme de statistiques agrégées. Ce module affiche la répartition des POI et zones par type sous forme de graphiques circulaires, les métriques clés des trajectoires (distance maximale, vitesse moyenne, couverture temporelle), ainsi que le centroïde global des données affiché sur une mini-carte interactive.
+
+Une console multi-services (\texttt{multi\_console.html}) offre une vue en temps réel des logs de tous les conteneurs Docker, facilitant le débogage et le suivi des traitements. Enfin, un module de récupération de données enrichies (\texttt{enhanced\_data.html}) permet d'interroger l'API Overpass pour importer des points d'intérêt depuis OpenStreetMap.
+
+\subsection{Serveur de gestion de job}
+
+Le serveur de gestion de job assure la coordination entre le serveur web et le cluster de calcul. Cette couche intermédiaire est essentielle pour maintenir le découplage entre les deux composants et garantir la fiabilité de l'exécution des tâches.
+
+\subsubsection{Broker de message (Redis)}
+
+Redis joue un rôle central dans l'architecture en tant que broker de messages. Il assure deux fonctions principales : la transmission des ordres de job du serveur web vers le cluster Spark, et le stockage temporaire des statuts d'avancement des tâches.
+
+Le canal \texttt{spark\_jobs} est utilisé pour la publication des ordres de job. Chaque message contient un objet JSON décrivant le job : identifiant unique, nom du script à exécuter, chemin du fichier d'entrée, et paramètres optionnels. Les statuts de job sont stockés dans des clés Redis avec un TTL d'une heure, permettant au front-end de consulter l'état d'avancement via l'API.
+
+\subsubsection{Abonnement aux tâches (Celery/Spark)}
+
+Le pattern de communication entre Celery et Spark suit le modèle Publish/Subscribe. Le worker Celery, exécuté dans un conteneur dédié, publie les messages sur Redis lorsqu'une tâche est soumise depuis l'interface web. De l'autre côté, le Spark Job Listener s'abonne au canal et consomme les messages pour déclencher les jobs.
+
+Cette architecture présente l'avantage de permettre une mise à l'échelle indépendante : on peut ajouter des workers Celery pour traiter plus de requêtes web simultanées, ou des workers Spark pour accélérer les calculs, sans modifier le code applicatif.
+
+\subsection{Serveur de calcul}
+
+Le serveur de calcul repose sur un cluster Apache Spark configuré en mode standalone. Cette architecture permet d'exploiter le parallélisme pour traiter efficacement les volumes importants de données de mobilité.
+
+\subsubsection{Orchestrateur (Spark Master)}
+
+Le Spark Master, exécuté dans le conteneur \texttt{spark-master}, assure la gestion des ressources du cluster. Il maintient la liste des workers disponibles, alloue les ressources (mémoire, cœurs CPU) aux applications soumises, et expose une interface web sur le port 8080 permettant de suivre l'état du cluster et des jobs en cours.
+
+La configuration du Master est définie dans le fichier \texttt{spark-defaults.conf}, notamment l'URL d'écoute (\texttt{spark://spark-master:7077}) et les paramètres de logging pour le History Server.
+
+\subsubsection{Nœuds d'exécution (Spark Worker)}
+
+Le cluster est configuré avec six workers, chacun disposant de 6 cœurs CPU et 6 Go de mémoire. Cette configuration, définie dans le fichier \texttt{docker-compose.yml}, permet de traiter des jeux de données de plusieurs millions de points en un temps raisonnable.
+
+Les workers s'enregistrent automatiquement auprès du Master au démarrage et se voient attribuer les tâches de calcul. Le système de réplication (\\texttt{deploy: replicas: 6}) facilite l'ajustement du nombre de workers selon les besoins de performance.
+
+\subsubsection{Traitement distribué (PySpark)}
+
+Les scripts de traitement sont développés en Python avec l'API PySpark. Le projet inclut quatre scripts principaux, chacun répondant à un besoin fonctionnel spécifique.
+
+\begin{table}[htbp]
+    \centering
+    \resizebox{\linewidth}{!}{
+        \begin{tabular}{|l|p{8cm}|}
+            \hline
+            \textbf{Script} & \textbf{Fonction} \\
+            \hline
+            \hline
+            \texttt{map\_data\_process.py} & Traitement des données OpenStreetMap (Overpass) pour extraction des POI et zones, avec catégorisation automatique. \\
+            \hline
+            \texttt{data\_converter.py} & Conversion des données OD (Origine-Destination) et télécom vers le format GNSS par interpolation linéaire. \\
+            \hline
+            \texttt{mode\_guesser.py} & Classification du mode de transport (marche, vélo, transport en commun, voiture) basée sur les métriques de vitesse. \\
+            \hline
+            \texttt{trip\_purpose\_guesser.py} & Identification du motif de déplacement (domicile, travail, courses, loisirs) par analyse de proximité aux POI. \\
+            \hline
+        \end{tabular}
+    }
+    \caption{Scripts PySpark de traitement des données.}
+    \label{tab:spark_scripts}
+\end{table}
+
+\subsubsection{Noeud d'écoute des tâches (Spark Listener)}
+
+Le Spark Job Listener est un composant Python (\texttt{spark\_job\_listener.py}) qui s'exécute dans un conteneur dédié au sein de l'environnement Spark. Il s'abonne au canal Redis \texttt{spark\_jobs} et attend les messages de job.
+
+Lorsqu'un message est reçu, le Listener valide les paramètres, met à jour le statut du job à ``running'' dans Redis, puis exécute le script correspondant via la commande \texttt{spark-submit}. À la fin de l'exécution, le statut est mis à jour à ``completed'' ou ``failed'' selon le résultat, permettant au front-end d'afficher l'état final à l'utilisateur.
+
+\subsection{Base de données}
+
+La base de données PostgreSQL constitue le tiers de persistance de l'architecture. L'extension PostGIS lui confère des capacités natives de stockage et de traitement des données géospatiales.
+
+\subsubsection{Structure de la base de données}
+
+Le schéma de la base de données, initialisé par le script \texttt{initdb.sql}, comprend huit tables principales organisées autour de trois domaines fonctionnels : le transport, les points d'intérêt, et les trajectoires.
+
+\begin{table}[htbp]
+    \centering
+    \resizebox{\linewidth}{!}{
+        \begin{tabular}{|l|l|p{6cm}|}
+            \hline
+            \textbf{Table} & \textbf{Type géométrique} & \textbf{Description} \\
+            \hline
+            \hline
+            \texttt{type\_transport} & - & Référentiel des modes de transport (Bus, Tram, Métro, etc.). \\
+            \hline
+            \texttt{arret} & Point (4326) & Arrêts de transport avec position géographique. \\
+            \hline
+            \texttt{ligne} & - & Lignes de transport avec capacité. \\
+            \hline
+            \texttt{arret\_ligne} & - & Association arrêts-lignes (many-to-many). \\
+            \hline
+            \texttt{poi} & Point (4326) & Points d'intérêt avec type et sous-type. \\
+            \hline
+            \texttt{zone} & Polygon (4326) & Zones géographiques (quartiers, zones d'étude). \\
+            \hline
+            \texttt{trajectory\_gnss} & Point (4326) & Points GPS des trajectoires utilisateurs avec timestamp et vitesse. \\
+            \hline
+        \end{tabular}
+    }
+    \caption{Structure des tables de la base de données.}
+    \label{tab:db_structure}
+\end{table}
+
+\subsubsection{Requêtes Géospatiales (PostGIS)}
+
+L'extension PostGIS enrichit PostgreSQL de fonctions spatiales permettant des requêtes géométriques performantes. Le projet exploite notamment les fonctions \texttt{ST\_Within} pour tester l'inclusion d'un point dans un polygone, \texttt{ST\_DWithin} pour rechercher les éléments dans un rayon donné, et \texttt{ST\_AsGeoJSON} pour exporter les géométries au format GeoJSON.
+
+Des index spatiaux de type GIST sont créés sur les colonnes géométriques (\texttt{position} pour les arrêts et POI, \texttt{geom} pour les zones et trajectoires), garantissant des performances optimales même sur des volumes importants de données. Ces index permettent de répondre aux requêtes de type ``bounding box'' en temps quasi-constant, condition essentielle pour la fluidité de l'interface cartographique.
+
+\section{Usage utilisateur}
+
+\subsection{Interface utilisateur}
+
+L'interface utilisateur a été conçue selon les principes de simplicité et d'efficacité. La page d'accueil présente les différentes fonctionnalités de la plateforme sous forme de cartes cliquables, chacune accompagnée d'une icône et d'une brève description. Cette organisation permet à un nouvel utilisateur de comprendre rapidement les possibilités offertes par l'outil.
+
+La navigation s'effectue via un menu latéral persistant, assurant un accès rapide aux différentes sections depuis n'importe quelle page. Le design adopte une esthétique moderne avec un thème sombre, des dégradés subtils et des animations de transition fluides. L'utilisation de glassmorphisme (effets de transparence et de flou) renforce l'aspect contemporain de l'interface tout en préservant la lisibilité des informations.
+
+L'interface s'adapte aux différentes tailles d'écran grâce à un design responsive, permettant une utilisation aussi bien sur un écran d'ordinateur de bureau que sur une tablette. Les éléments interactifs (boutons, formulaires, cartes) respectent les conventions d'accessibilité web, avec des contrastes suffisants et des zones de clic de taille appropriée.
+
+\subsection{Fonctionnalités}
+
+La plateforme offre trois catégories principales de fonctionnalités : la visualisation des données géographiques, l'exécution d'analyses automatisées, et l'import de nouvelles données. Chaque fonctionnalité est accessible depuis le menu principal et dispose de sa propre interface dédiée, optimisée pour le cas d'usage correspondant.
+
+\subsubsection{Visualisation des données}
+
+La carte interactive constitue le cœur de la visualisation. Elle permet d'explorer les données géographiques stockées dans la base de données en superposant différentes couches d'information. L'utilisateur peut activer ou désactiver chaque couche individuellement via un panneau de contrôle latéral, offrant une vue personnalisée selon ses besoins d'analyse.
+
+Les couches disponibles comprennent les arrêts de transport (représentés par des marqueurs rouges), les points d'intérêt (avec des icônes catégorisées selon leur type : éducation, commerce, santé, loisirs), les zones géographiques (polygones colorés selon leur catégorie), et les traces GPS des utilisateurs (polylignes avec code couleur par trajectoire). Un système de filtres permet d'affiner l'affichage en sélectionnant uniquement certains types ou sous-types d'éléments.
+
+L'interaction avec la carte est intuitive : le zoom et le déplacement s'effectuent par gestes tactiles ou à la souris, le clic sur un élément affiche une popup d'information détaillée, et la molette permet un zoom progressif. Le fond de carte peut être modifié parmi plusieurs styles (standard, satellite, topographique) selon les préférences de l'utilisateur.
+
+\subsubsection{Requêtes et analyses}
+
+Deux modules d'analyse sont disponibles pour enrichir les données brutes de trajectoires. Le premier, le Mode Guesser, permet d'identifier automatiquement le mode de transport utilisé pour chaque trajectoire. L'algorithme analyse les métriques de vitesse (moyenne, maximale) et la durée du trajet pour classifier le déplacement en l'une des catégories suivantes : marche (vitesse moyenne inférieure à 7 km/h), vélo (entre 7 et 25 km/h), transport en commun (entre 25 et 80 km/h avec variations caractéristiques), ou voiture (vitesse élevée et régulière).
+
+Le second module, le Trip Purpose Guesser, identifie le motif probable du déplacement en analysant les points de départ et d'arrivée. L'algorithme recherche les POI et zones présents dans un rayon de 500 mètres autour de ces points, puis attribue un motif (domicile, travail, courses, loisirs, santé, éducation) selon le type d'éléments trouvés. Cette analyse permet de comprendre les patterns de mobilité au-delà de la simple trajectoire géographique.
+
+\subsubsection{Import des données}
+
+Le module d'import permet de charger de nouvelles données dans la plateforme. L'utilisateur peut téléverser des fichiers au format CSV ou JSON contenant des données de mobilité. Trois types de données sont acceptés : les traces GNSS brutes (séquences de points GPS horodatés), les matrices Origine-Destination (paires de points avec heure de départ et durée), et les données télécom (positions approximatives issues des antennes relais).
+
+Pour les données OD et télécom, un processus de conversion automatique génère des trajectoires GNSS synthétiques par interpolation linéaire, permettant leur exploitation par les algorithmes d'analyse. L'utilisateur peut suivre l'avancement du traitement via une barre de progression, et les données converties sont automatiquement insérées dans la base de données une fois le traitement terminé.
+
+\section{Analyse post réalisation et perspective}
+
+\subsection{Bilan}
+
+Ce projet a permis de concevoir et développer une plateforme fonctionnelle répondant aux objectifs initiaux définis dans le cahier des charges. L'architecture micro-services mise en place offre la modularité et la scalabilité recherchées, tandis que l'interface web permet une prise en main rapide par des utilisateurs non-experts en géomatique.
+
+La principale difficulté rencontrée concerne la mise en place de la communication asynchrone entre le serveur web et le cluster Spark. Le pattern Publish/Subscribe via Redis, bien que conceptuellement simple, a nécessité plusieurs itérations pour gérer correctement les cas d'erreur (timeout, script inexistant, fichier introuvable) et fournir un retour d'information fiable à l'utilisateur.
+
+Le second défi majeur a porté sur l'optimisation des requêtes PostGIS pour maintenir des temps de réponse acceptables lors de l'affichage de grandes quantités de données sur la carte. L'ajout d'index spatiaux et le filtrage par bounding box côté serveur ont permis de résoudre ce problème, mais au prix d'une complexité accrue dans le code de requêtage.
+
+\subsection{Perspectives}
+
+Plusieurs axes d'amélioration sont envisageables pour les évolutions futures de la plateforme. Le remplacement des heuristiques actuelles de classification (mode de transport, motif de déplacement) par des modèles de machine learning entraînés sur des données labellisées permettrait d'améliorer significativement la précision des analyses.
+
+Un module de dashboard analytique a été implémenté, offrant des statistiques agrégées telles que la répartition des POI et zones par type, les métriques de trajectoires (distance maximale, vitesse, couverture temporelle) et la visualisation du centroïde global des données. Ce module peut être étendu avec des indicateurs supplémentaires comme les matrices OD synthétiques et les flux horaires.
+
+Deux modules additionnels sont actuellement en cours de développement : un générateur de cartes de chaleur (heatmap) permettant de visualiser la densité des passages sur le réseau, et un analyseur d'encombrement des routes identifiant les zones de congestion à partir des données de trajectoires.
+
+L'implémentation d'un système d'authentification et de gestion des droits permettrait un déploiement multi-utilisateurs avec isolation des données. Enfin, l'intégration de sources de données temps réel (API de transport en commun, données de trafic) transformerait la plateforme d'un outil d'analyse rétrospective en un véritable tableau de bord de la mobilité urbaine en temps réel.
+
+\section{Conclusion}
+
+Ce projet de TAI a permis de développer une plateforme web dédiée à l'analyse de la mobilité urbaine, combinant visualisation cartographique interactive et capacités de traitement Big Data. L'architecture mise en place, reposant sur Docker, Django, Apache Spark et PostgreSQL/PostGIS, répond aux exigences de modularité, de performance et de facilité de déploiement énoncées dans le cahier des charges.
+
+La solution proposée comble un vide dans le paysage des outils d'analyse de mobilité en offrant une alternative accessible aux logiciels SIG professionnels coûteux, tout en conservant des capacités de traitement adaptées aux volumes de données actuels. Les collectivités territoriales, associations et PME disposent désormais d'un outil open-source permettant de valoriser leurs données de mobilité sans investissement matériel ou logiciel important.
+
+Ce projet ouvre également des perspectives de recherche sur l'application des techniques de machine learning à la classification des comportements de mobilité, domaine en pleine expansion avec la multiplication des sources de données géolocalisées.
+
+\section{Annexe}
+
+% Début de la zone des annexes
+\appendix 
+
+% Annexe A
+\section{Cahier des charges initial}
+% pages=- signifie "toutes les pages"
+% scale=0.9 permet de réduire légèrement pour laisser de la place aux marges/numéros de page
+% pagecommand={} permet de garder la numérotation des pages de VOTRE rapport sur le PDF inséré
+\includepdf[pages=-, nup=2x1, frame=true, scale=0.95, pagecommand={}]{"cahier des charges TAI.pdf"}
+
+% Annexe B (si vous avez le Gantt en PDF par exemple)
+\includepdf[pages=-, angle=90, scale=0.9, pagecommand={}]{"cahier des charges TAI-3.pdf"} 
+% Note : 'angle=90' est utile si votre PDF est en format paysage
+
+% Annexe C - Docker Compose
+\section{Configuration Docker Compose}
+
+Le fichier \texttt{docker-compose.yml} suivant définit l'orchestration des huit services de la plateforme :
+
+\begin{lstlisting}[language=yaml, basicstyle=\tiny\ttfamily, breaklines=true, frame=single, caption={docker-compose.yml}]
+services:
+  db:
+    build:
+      context: ./db
+      dockerfile: Dockerfile
+    container_name: postgres_postgis
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - mobility-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  spark-master:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=0.0.0.0
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
+    entrypoint: ['./entrypoint.sh', 'master']
+    ports:
+      - '8080:8080'
+      - '7077:7077'
+    volumes:
+      - ./data:/opt/spark/data
+      - ./apps:/opt/spark/apps
+      - spark-logs:/opt/spark/spark-events
+    networks:
+      - mobility-network
+
+  spark-worker:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=${SPARK_MASTER_URL}
+      - SPARK_WORKER_CORES=6
+      - SPARK_WORKER_MEMORY=6g
+    entrypoint: ['./entrypoint.sh', 'worker']
+    volumes:
+      - ./data:/opt/spark/data
+      - ./apps:/opt/spark/apps
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    deploy:
+      replicas: 6
+    networks:
+      - mobility-network
+
+  spark-job-listener:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    container_name: spark-job-listener
+    environment:
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    entrypoint: ['python3', '/opt/spark/apps/spark_job_listener.py']
+    volumes:
+      - ./data:/opt/spark/data
+      - ./spark/app:/opt/spark/apps
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - mobility-network
+
+  web:
+    build:
+      context: ./django
+      dockerfile: Dockerfile
+    container_name: django-server
+    entrypoint: ["/app/entrypoint.sh"]
+    command: python app.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./django/app:/app
+      - ./data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+      spark-master:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - mobility-network
+
+  celery-worker:
+    build:
+      context: ./django
+      dockerfile: Dockerfile
+    container_name: celery-worker
+    entrypoint: ["/app/entrypoint.sh"]
+    command: celery -A app worker --loglevel=info
+    volumes:
+      - ./django/app:/app
+      - ./data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks:
+      - mobility-network
+
+  redis:
+    image: "redis:latest"
+    container_name: redis-server
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - mobility-network
+
+volumes:
+  postgres_data:
+  spark-logs:
+
+networks:
+  mobility-network:
+    driver: bridge
+\end{lstlisting}
+
+% Annexe D - Arborescence du projet
+\section{Arborescence du projet}
+
+\begin{figure*}[htbp]
+\begin{minipage}{\textwidth}
+\begin{lstlisting}[basicstyle=\small\ttfamily, frame=single, linewidth=\textwidth, xleftmargin=0pt, xrightmargin=0pt, caption={Structure des fichiers du projet}]
+mobilite-urbaine/
+|-- apps/                           # Applications Spark (montees en volume)
+|-- db/                             # Configuration PostgreSQL + PostGIS
+|   |-- Dockerfile
+|   |-- initdb.sql                  # Script d'initialisation de la base
+|   +-- samples_aix.sql             # Donnees d'exemple
+|-- django/                         # Application web Django
+|   |-- app/
+|   |   |-- static/
+|   |   |   |-- css/                # Feuilles de style (carte.css, common.css...)
+|   |   |   +-- js/                 # Scripts JS (carte-config.js, carte-controller.js...)
+|   |   |-- templates/              # Templates HTML
+|   |   |   |-- base.html
+|   |   |   |-- carte.html          # Carte interactive
+|   |   |   |-- conversion.html     # Import de donnees
+|   |   |   |-- mode_guesser.html   # Analyse mode transport
+|   |   |   |-- trip_purpose_guesser.html
+|   |   |   +-- ...                 # Autres templates
+|   |   |-- views/                  # Vues Python
+|   |   |   |-- carte.py            # API carte
+|   |   |   |-- database.py         # Gestionnaire PostGIS
+|   |   |   |-- conversion_api.py   # API conversion
+|   |   |   |-- mode_guesser_api.py
+|   |   |   +-- trip_purpose_api.py
+|   |   |-- app.py                  # Point d'entree Django
+|   |   |-- celery_app.py           # Configuration Celery
+|   |   +-- tasks.py                # Taches Celery
+|   |-- Dockerfile
+|   |-- entrypoint.sh
+|   +-- requirements.txt
+|-- samples/                        # Fichiers d'exemple
+|   |-- test_gnss.csv
+|   |-- test_od.csv
+|   +-- test_telecom.csv
+|-- spark/                          # Configuration Apache Spark
+|   |-- app/                        # Scripts PySpark
+|   |   |-- data_converter.py       # Conversion OD/Telecom -> GNSS
+|   |   |-- map_data_process.py     # Traitement donnees OSM
+|   |   |-- mode_guesser.py         # Classification mode transport
+|   |   |-- trip_purpose_guesser.py # Classification motif deplacement
+|   |   +-- spark_job_listener.py   # Listener Redis -> Spark
+|   |-- Dockerfile
+|   |-- entrypoint.sh
+|   |-- requirements.txt
+|   +-- spark-defaults.conf
+|-- docker-compose.yml              # Orchestration des services
+|-- .env                            # Variables d'environnement
++-- README.md                       # Documentation
+\end{lstlisting}
+\end{minipage}
+\end{figure*}
+
+\begin{figure*}[p] % L'étoile * est cruciale : elle dit "prends toute la largeur de la page"
+    \centering
+    % On tourne l'image de 90° (angle=90)
+    % On limite sa largeur (qui est sa hauteur une fois tournée) à la hauteur du texte (\textheight)
+    % On limite sa hauteur (sa largeur une fois tournée) à la largeur du texte (\textwidth)
+    \includegraphics[angle=90, width=0.85\textwidth, height=0.95\textheight, keepaspectratio]{tai_info_latex_template_V1/figs/archi.png}
+    
+    \caption{Diagramme d'architecture.}
+    \label{fig:archi_paysage}
+\end{figure*}
+
+\end{document}

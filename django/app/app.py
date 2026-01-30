@@ -51,7 +51,6 @@ if not settings.configured:
         STATIC_URL='/static/',
         STATICFILES_DIRS=[os.path.join(BASE_DIR, 'static')],
         
-        # Configuration Celery
         CELERY_BROKER_URL=os.environ.get('CELERY_BROKER_URL', 'redis://redis:6379/0'),
         CELERY_RESULT_BACKEND=os.environ.get('CELERY_RESULT_BACKEND', 'redis://redis:6379/0'),
         CELERY_ACCEPT_CONTENT=['json'],
@@ -62,14 +61,16 @@ if not settings.configured:
 
 django.setup()
 
-# Import Celery app pour le rendre accessible
 from celery_app import app as celery_app
 
 from views.carte import carte_view, api_search, api_layers_list, api_layer_data, api_layer_config
-from views.handler import database_console, index, health_check, spark_upper , render_enhanced_data, conversion_view, compute_view, compute_wiki_view
+from views.handler import database_console, index, health_check, spark_upper , render_enhanced_data, conversion_view, compute_view, compute_wiki_view, mode_guesser_view, trip_purpose_guesser_view, analytics_view, heatmap_wip_view, congestion_wip_view
 from views.get_enhanced_data import GetEnchancedData
 from views.docker_console import multi_console_view, get_docker_logs, get_all_containers_status
 from views.conversion_api import trigger_conversion_job
+from views.mode_guesser_api import trigger_mode_guesser, get_mode_guesser_status
+from views.trip_purpose_api import trigger_trip_purpose, get_trip_purpose_status
+from views.analytics_api import trigger_analytics, get_analytics_status
 
 
 urlpatterns = [
@@ -83,6 +84,7 @@ urlpatterns = [
     path('conversion/', conversion_view, name='conversion_page'),
     path('compute/', compute_view, name='compute'),
     path('compute/wiki/', compute_wiki_view, name='compute_wiki'),
+    path('compute/mode-guesser/', mode_guesser_view, name='mode_guesser'),
     
     # API
     path('health/', health_check, name='health_check'),
@@ -94,6 +96,21 @@ urlpatterns = [
     path('api/docker-logs/<str:service_id>/', get_docker_logs, name='api_docker_logs'),
     path('api/docker-status/', get_all_containers_status, name='api_docker_status'),
     path('api/conversion/trigger/', trigger_conversion_job, name='api_trigger_conversion'),
+    path('api/mode-guesser/trigger/', trigger_mode_guesser, name='api_trigger_mode_guesser'),
+    path('api/mode-guesser/status/<str:job_id>/', get_mode_guesser_status, name='api_mode_guesser_status'),
+    # Trip Purpose Guesser
+    path('compute/trip-purpose/', trip_purpose_guesser_view, name='trip_purpose_guesser'),
+    path('api/trip-purpose/trigger/', trigger_trip_purpose, name='api_trigger_trip_purpose'),
+    path('api/trip-purpose/status/<str:job_id>/', get_trip_purpose_status, name='api_trip_purpose_status'),
+    
+    # Analytics Dashboard
+    path('analytics/', analytics_view, name='analytics'),
+    path('api/analytics/trigger/', trigger_analytics, name='api_trigger_analytics'),
+    path('api/analytics/status/<str:job_id>/', get_analytics_status, name='api_analytics_status'),
+    
+    # Work in Progress pages
+    path('compute/heatmap/', heatmap_wip_view, name='heatmap_wip'),
+    path('compute/congestion/', congestion_wip_view, name='congestion_wip'),
 ]
 
 

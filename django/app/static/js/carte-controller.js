@@ -272,7 +272,6 @@ class MapController {
         if (layer.filters) {
             layer.filters.forEach(filter => {
                 if (filter.value && filter.value !== 'Tous' && filter.value !== 'Toutes') {
-                    // Vérifier si c'est un tableau vide (multiselect avec rien de sélectionné)
                     if (Array.isArray(filter.value) && filter.value.length === 0) {
                         hasEmptyMultiselect = true;
                     } else {
@@ -282,7 +281,6 @@ class MapController {
             });
         }
 
-        // Si un filtre multiselect est vide, cacher la couche
         if (hasEmptyMultiselect) {
             this.hideLayerData(layerId);
             return;
@@ -414,7 +412,6 @@ class MapController {
                     };
                 },
                 pointToLayer: (feature, latlng) => {
-                    // Les points individuels des traces ne sont plus affichés pour alléger la carte
                     if (layerId === 'traces' && feature.properties.feature_type === 'point') {
                         return null;
                     }
@@ -427,18 +424,17 @@ class MapController {
                     if (feature.properties) {
                         layerObj.bindPopup(this.createPopupContent(feature.properties));
 
-                        // Effet de sélection pour les traces GNSS
                         if (layerId === 'traces' && feature.geometry.type === 'LineString') {
                             layerObj.on('popupopen', () => {
                                 layerObj.setStyle({
-                                    color: '#3498db', // Bleu
+                                    color: '#3498db',
                                     weight: (config.weight || 2) + 2,
                                     opacity: 1
                                 });
                             });
                             layerObj.on('popupclose', () => {
                                 layerObj.setStyle({
-                                    color: config.color || '#FF0000', // Rouge par défaut
+                                    color: config.color || '#FF0000',
                                     weight: config.weight || 2,
                                     opacity: config.opacity || 0.7
                                 });
@@ -535,7 +531,6 @@ class MapController {
             const response = await fetch(url);
             const config = await response.json();
 
-            // Préserver les valeurs actuelles si elles existent
             const oldLayer = this.layers[layerId];
             if (oldLayer) {
                 if (config.filters && oldLayer.filters) {
@@ -552,7 +547,6 @@ class MapController {
                 }
             }
 
-            // Stocker la config complète pour accès ultérieur (hiérarchie)
             this.layers[layerId] = { ...this.layers[layerId], ...config };
 
             this.currentDetailLayer = layerId;
@@ -647,7 +641,6 @@ class MapController {
                         <div class="multiselect-options">`;
 
                 if (isHierarchical) {
-                    // Si on est sur le filtre "type", on groupe les subtypes en dessous
                     const hierarchy = config.hierarchy;
                     const subtypeFilter = config.filters.find(f => f.name === 'subtype');
 
@@ -675,7 +668,6 @@ class MapController {
                         html += `</div></div>`;
                     });
                 } else {
-                    // Affichage standard pour les multiselects non hiérarchiques
                     param.options.forEach(opt => {
                         const checked = param.value.includes(opt);
                         html += `
@@ -704,7 +696,6 @@ class MapController {
                 this.handleHierarchicalChange(layerId, e.target);
                 this.updateLayerParameter(layerId, e.target);
 
-                // Mettre à jour le texte du header multiselect si nécessaire
                 if (e.target.closest('.multiselect-container')) {
                     const container = e.target.closest('.multiselect-container');
                     const checkedCount = container.querySelectorAll('.parameter-control:checked').length;
@@ -720,7 +711,6 @@ class MapController {
             }
         });
 
-        // Gestion des boutons Tout cocher / Tout décocher
         document.querySelectorAll('.action-btn.select-all').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -728,13 +718,10 @@ class MapController {
                 const checkboxes = container.querySelectorAll('.parameter-control');
                 checkboxes.forEach(cb => cb.checked = true);
 
-                // Mettre à jour tous les filtres distincts (type et subtype)
                 const layer = this.layers[layerId];
                 if (layer && layer.hierarchy) {
-                    // Mettre à jour le filtre type
                     const typeCheckbox = container.querySelector('.parameter-control[data-param="type"]');
                     if (typeCheckbox) this.updateLayerParameter(layerId, typeCheckbox);
-                    // Mettre à jour le filtre subtype
                     const subtypeCheckbox = container.querySelector('.parameter-control[data-param="subtype"]');
                     if (subtypeCheckbox) this.updateLayerParameter(layerId, subtypeCheckbox);
                 } else if (checkboxes.length > 0) {
@@ -752,13 +739,10 @@ class MapController {
                 const checkboxes = container.querySelectorAll('.parameter-control');
                 checkboxes.forEach(cb => cb.checked = false);
 
-                // Mettre à jour tous les filtres distincts (type et subtype)
                 const layer = this.layers[layerId];
                 if (layer && layer.hierarchy) {
-                    // Mettre à jour le filtre type
                     const typeCheckbox = container.querySelector('.parameter-control[data-param="type"]');
                     if (typeCheckbox) this.updateLayerParameter(layerId, typeCheckbox);
-                    // Mettre à jour le filtre subtype
                     const subtypeCheckbox = container.querySelector('.parameter-control[data-param="subtype"]');
                     if (subtypeCheckbox) this.updateLayerParameter(layerId, subtypeCheckbox);
                 } else if (checkboxes.length > 0) {
@@ -775,13 +759,10 @@ class MapController {
         const layer = this.layers[layerId];
         if (!layer || !layer.hierarchy) return;
 
-        // Si on change un "type" (parent)
         if (paramName === 'type') {
             const isChecked = control.checked;
             const typeValue = control.value;
             const subtypesToToggle = layer.hierarchy[typeValue] || [];
-
-            // Trouver toutes les checkboxes de "subtype" qui correspondent aux sous-types du parent
             const subtypeCheckboxes = document.querySelectorAll(
                 `#detailContent .parameter-control[data-param="subtype"]`
             );
@@ -792,19 +773,14 @@ class MapController {
                 }
             });
 
-            // Synchroniser le filtre "subtype" dans le cache
-            // On appelle updateLayerParameter avec une checkbox de subtype pour déclencher la mise à jour globale de la liste
             const firstSubtypeCb = Array.from(subtypeCheckboxes).find(cb => subtypesToToggle.includes(cb.value));
             if (firstSubtypeCb) {
                 this.updateLayerParameter(layerId, firstSubtypeCb);
             }
         }
-        // Si on change un "subtype" (enfant)
         else if (paramName === 'subtype') {
             const subtypeValue = control.value;
             let parentType = null;
-
-            // Trouver le parent pour ce subtype
             for (const [type, subtypes] of Object.entries(layer.hierarchy)) {
                 if (subtypes.includes(subtypeValue)) {
                     parentType = type;
@@ -819,10 +795,8 @@ class MapController {
 
                 if (parentCheckbox) {
                     if (!control.checked) {
-                        // Si on décoche un enfant, on décoche le parent
                         parentCheckbox.checked = false;
                     } else {
-                        // Si on coche un enfant, on vérifie si tous les enfants du même parent sont cochés
                         const subtypesOfParent = layer.hierarchy[parentType];
                         const allCheckboxesOfSubtypes = Array.from(document.querySelectorAll(
                             `#detailContent .parameter-control[data-param="subtype"]`
@@ -833,7 +807,6 @@ class MapController {
                             parentCheckbox.checked = true;
                         }
                     }
-                    // Mettre à jour le cache du parent "type"
                     this.updateLayerParameter(layerId, parentCheckbox);
                 }
             }
@@ -845,23 +818,17 @@ class MapController {
         const layer = this.layers[layerId];
         let value;
 
-        // Déterminer le type de paramètre depuis la config
         const paramConfig = [...(layer.parameters || []), ...(layer.filters || [])]
             .find(p => p.name === paramName);
 
-        // Vérifier si c'est un multiselect (soit via paramConfig, soit si c'est un subtype dans une hiérarchie)
         const isMultiselect = (paramConfig && paramConfig.type === 'multiselect') ||
             (paramName === 'subtype' && layer.hierarchy);
 
         if (isMultiselect) {
-            // Pour multiselect, on récupère toutes les valeurs cochées
             const checkedControls = document.querySelectorAll(
                 `#detailContent .parameter-control[data-param="${paramName}"]:checked`
             );
             value = Array.from(checkedControls).map(c => c.value);
-
-            // Si c'est le filtre "type" et qu'il y a une hiérarchie,
-            // on doit s'assurer d'inclure les types dont des sous-types sont cochés
             if (paramName === 'type' && layer.hierarchy) {
                 const checkedSubtypes = document.querySelectorAll(
                     `#detailContent .parameter-control[data-param="subtype"]:checked`
@@ -1100,7 +1067,6 @@ class MapController {
     }
 }
 
-// Initialisation au chargement de la page
 document.addEventListener('DOMContentLoaded', () => {
     window.mapController = new MapController(MAP_CONFIG);
 });

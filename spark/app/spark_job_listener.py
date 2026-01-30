@@ -13,21 +13,21 @@ import os
 import sys
 import time
 
-# Forcer le flush des outputs pour Docker
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
-# Configuration
 REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
 SPARK_MASTER = os.getenv('SPARK_MASTER_URL', 'spark://spark-master:7077')
 SPARK_APPS_PATH = '/opt/spark/apps'
 
-# Mapping des scripts disponibles
 AVAILABLE_SCRIPTS = {
     'map_data_process.py': os.path.join(SPARK_APPS_PATH, 'map_data_process.py'),
     'upper.py': os.path.join(SPARK_APPS_PATH, 'upper.py'),
     'data_converter.py': os.path.join(SPARK_APPS_PATH, 'data_converter.py'),
+    'mode_guesser.py': os.path.join(SPARK_APPS_PATH, 'mode_guesser.py'),
+    'trip_purpose_guesser.py': os.path.join(SPARK_APPS_PATH, 'trip_purpose_guesser.py'),
+    'analytics_processor.py': os.path.join(SPARK_APPS_PATH, 'analytics_processor.py'),
 }
 
 
@@ -60,7 +60,6 @@ def run_spark_job(job_info):
         print(f"❌ Fichier d'entrée non trouvé: {input_file}")
         return False
     
-    # Construire la commande spark-submit
     cmd = [
         'spark-submit',
         '--master', SPARK_MASTER,
@@ -76,20 +75,17 @@ def run_spark_job(job_info):
     print(f"📋 Commande: {' '.join(cmd)}")
     
     try:
-        # Exécuter le job Spark
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=300  # 5 minutes timeout
+            timeout=300
         )
         
         if result.returncode == 0:
             print(f"✅ Job {job_id} terminé avec succès")
-            # Afficher la sortie complète (ou tronquée si > 2000 chars)
             output = result.stdout
             if len(output) > 2000:
-                # Afficher le début et la fin
                 print(f"   Sortie (début):\n{output[:1000]}")
                 print(f"   [...{len(output)-2000} caractères omis...]")
                 print(f"   Sortie (fin):\n{output[-1000:]}")
@@ -98,7 +94,6 @@ def run_spark_job(job_info):
             return True
         else:
             print(f"❌ Job {job_id} échoué (code: {result.returncode})")
-            # Afficher plus d'erreurs pour le debug
             print(f"   Erreur stderr:\n{result.stderr[-2000:] if len(result.stderr) > 2000 else result.stderr}")
             if result.stdout:
                 print(f"   Sortie stdout:\n{result.stdout[-1000:] if len(result.stdout) > 1000 else result.stdout}")
@@ -121,7 +116,7 @@ def update_job_status(redis_client, job_id, status, result=None):
         'timestamp': time.time()
     }
     redis_client.set(f'spark_job_status:{job_id}', json.dumps(job_status))
-    redis_client.expire(f'spark_job_status:{job_id}', 3600)  # Expire après 1 heure
+    redis_client.expire(f'spark_job_status:{job_id}', 3600)
 
 
 def main():
@@ -130,7 +125,6 @@ def main():
     print(f"   Redis: {REDIS_HOST}:{REDIS_PORT}")
     print(f"   Spark Master: {SPARK_MASTER}")
     
-    # Attendre que Redis soit disponible
     max_retries = 30
     for i in range(max_retries):
         try:
@@ -150,7 +144,6 @@ def main():
         print("❌ Impossible de se connecter à Redis")
         sys.exit(1)
     
-    # S'abonner au channel spark_jobs
     pubsub = redis_client.pubsub()
     pubsub.subscribe('spark_jobs')
     
@@ -164,13 +157,10 @@ def main():
                 
                 job_id = job_info.get('job_id')
                 
-                # Mettre à jour le statut à "running"
                 update_job_status(redis_client, job_id, 'running')
                 
-                # Exécuter le job
                 success = run_spark_job(job_info)
                 
-                # Mettre à jour le statut final
                 final_status = 'completed' if success else 'failed'
                 update_job_status(redis_client, job_id, final_status)
                 

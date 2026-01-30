@@ -190,7 +190,6 @@ def api_search(request):
         results = []
         search_param = f'%{query}%'
         
-        # Rechercher dans les arrêts
         arrets = db_manager.execute_query("""
             SELECT a.nom, ST_Y(a.position) as lat, ST_X(a.position) as lng, t.nom as type
             FROM arret a
@@ -208,7 +207,6 @@ def api_search(request):
                 'category': 'transport'
             } for a in arrets])
         
-        # Rechercher dans les POI
         pois = db_manager.execute_query("""
             SELECT nom, ST_Y(position) as lat, ST_X(position) as lng, type
             FROM poi
@@ -299,7 +297,6 @@ def api_layer_config(request, layer_id):
     
     config = LAYERS_CONFIG[layer_id].copy()
     
-    # Charger les options dynamiques des filtres depuis la DB
     if config.get('filters'):
         try:
             if db_manager.connect():
